@@ -1,0 +1,452 @@
+
+                           IDRIVE RECURSIVE ACCOUNT AUDIT                            
+Folder Hierarchy                                   |          Size |      Files
+-------------------------------------------------------------------------------------
+
+DEVICE: NickolaysMacBookPro (D01563711761000105006)
+   > !!RAID                                        |       4.00 GB |     5779 files
+     > !!ebooks                                      |       2.28 GB |      471 files
+       > ebooks from SkyDrive                          |       1.90 GB |      286 files
+         > ebooks                                        |       1.90 GB |      286 files
+   > Users                                         |     380.44 GB |   698159 files
+     > Shared                                        |      69.48 GB |   468873 files
+       > Previously Relocated Items                    |      34.75 GB |   234485 files
+         > Security                                      |      34.75 GB |   234403 files
+       > Relocated Items                               |      34.73 GB |   234388 files
+         > Security                                      |      34.73 GB |   234388 files
+     > nickolaycohen                                 |     310.95 GB |   229176 files
+       > Desktop                                       |      13.48 GB |    30307 files
+       > Downloads                                     |      24.39 GB |     8199 files
+       > Pictures                                      |     167.99 GB |    72361 files
+         > iPhoto-Export                                 |       6.24 GB |     1445 files
+         > Curated Images                                |       4.52 GB |     1465 files
+         > Photos Library iPhone12 20230115.photosl      |      44.12 GB |    13206 files
+         > Downloaded Albums                             |       5.98 GB |    13059 files
+         > Evas Pictures                                 |       2.13 GB |      963 files
+         > 2018-08-27                                    |       1.23 GB |      183 files
+         > Nikon.photoslibrary                           |       7.99 GB |      506 files
+         > Image Capture Import                          |      42.20 GB |    13493 files
+         > 2019-08-05                                    |       1.16 GB |      244 files
+         > 2017-08-23_26                                 |       3.18 GB |     1112 files
+         > Benny cohen.milena@gmail.com deleted pic      |       3.52 GB |     1046 files
+         > CanonEOS.photoslibrary                        |       4.91 GB |     2285 files
+         > 2017-08-04                                    |       1.27 GB |      268 files
+         > rawImport-iPhone13ProMax                      |       2.58 GB |       74 files
+         > Photos Library Benny iPhone12 Red.photos      |       5.90 GB |     3435 files
+         > milena.cohen1120@gmail.com deleted pictu      |       2.44 GB |       30 files
+         > 2019-01-19                                    |       1.12 GB |       48 files
+         > Benny-iPhone12-Red.photoslibrary              |       7.14 GB |     3877 files
+       > ebooks                                        |       3.68 GB |      494 files
+         > ebooks from SkyDrive                          |       1.90 GB |      286 files
+       > Documents                                     |      11.43 GB |    22986 files
+         > Google+ Backup Download                       |       6.16 GB |    14476 files
+       > 00-Projects                                   |       7.87 GB |     8249 files
+         > CRUIZER-4GB Data                              |       2.43 GB |     4585 files
+         > Kingstouch                                    |       2.10 GB |     1467 files
+       > tmp                                           |      32.12 GB |     6337 files
+         > test-restore                                  |      32.11 GB |     6324 files
+       > milenacohen iPhoto Library                    |      13.62 GB |    11024 files
+         > iPhoto Library.photolibrary                   |       4.76 GB |     4669 files
+         > iPhoto Library.migratedphotolibrary           |       4.76 GB |     4669 files
+         > iPhoto Library.photoslibrary                  |       4.09 GB |     1686 files
+       > Archives                                      |      34.25 GB |    56947 files
+         > dmg                                           |       4.29 GB |     1032 files
+         > cohen.milena@gmail.com removed items          |       4.28 GB |       29 files
+         > nickolay.cohen@gmail.com removed items        |      22.54 GB |     2030 files
+         > fonts                                         |       2.12 GB |    52937 files
+       > Movies                                        |       1.13 GB |      555 files
+   > Copy of freenas                               |       6.31 GB |    56287 files
+     > 00-Projects                                   |       4.19 GB |     3350 files
+       > Kingstouch                                    |       2.10 GB |     1467 files
+     > !fonts                                        |       2.12 GB |    52937 files
+   > copy of iMac 2010 Macintosh HD                |       5.98 GB |    66633 files
+     > Library                                       |       2.26 GB |    31941 files
+     > !!RAID                                        |       1.86 GB |     5266 files
+     > Applications                                  |       1.52 GB |    23807 files
+   > Volumes                                       |       1.61 GB |      349 files
+     > One Touch                                     |       1.57 GB |      348 files
+       > Gdrive Large Files Export                     |       1.57 GB |      348 files
+         > Photos-001                                    |       1.03 GB |      184 files
+   > opt                                           |       1.02 GB |    32895 files
+-------------------------------------------------------------------------------------
+
+DEVICE: NickolaysiMac (D01563744743000489825)
+   > !!RAID                                        |       4.00 GB |     5779 files
+     > !!ebooks                                      |       2.28 GB |      471 files
+       > ebooks from SkyDrive                          |       1.90 GB |      286 files
+         > ebooks                                        |       1.90 GB |      286 files
+   > Users                                         |     171.75 GB |    51035 files
+     > nickolaycohen                                 |     171.75 GB |    51035 files
+       > Pictures                                      |     166.44 GB |    48720 files
+         > Pictures COHENS BG                            |       1.40 GB |     1314 files
+         > Pictures OTHERS - (Private)                   |       5.61 GB |     1993 files
+         > iPhone13 Photos Library.photoslibrary         |       9.05 GB |    10235 files
+         > Pipeline                                      |      89.95 GB |    17654 files
+         > LightRoom Catalog and Data                    |      57.33 GB |    16479 files
+       > Documents                                     |       5.31 GB |     2315 files
+   > Pictures                                      |      97.91 GB |    29083 files
+     > Photos Library.photoslibrary                  |      40.90 GB |    17652 files
+       > resources                                     |       8.82 GB |    13207 files
+         > media                                         |       7.50 GB |     5696 files
+         > proxies                                       |       1.11 GB |     7458 files
+       > Masters                                       |      31.93 GB |     4292 files
+         > 2022                                          |      28.02 GB |     3599 files
+         > 2020                                          |       3.83 GB |      692 files
+     > Duplicated Items removed from iPhone XI       |      11.11 GB |     1322 files
+       > 20170804 - Amsterdam - North Holland, Au      |       1.27 GB |      268 files
+       > 20170813 - Sofia - Malinova Dolina - Sof      |       1.10 GB |        5 files
+         > IMG_0589.MOV                                  |       1.09 GB |        0 files
+       > 20171028 - Basketball Practice                |       1.62 GB |       19 files
+       > 20171104 - November 4, 2017                   |       1.12 GB |        3 files
+       > 20170910 - Colliers Mills - Lawrence Tow      |       1.02 GB |      504 files
+       > 20171014 - Basketball Practice                |       1.16 GB |       12 files
+       > 20171007 - October 7, 2017                    |       1.27 GB |       43 files
+     > Duplicated Items removed from iPhone 7 P      |       3.27 GB |      278 files
+       > 20170813 - Sofia - Malinova Dolina - Sof      |       1.10 GB |        5 files
+         > IMG_0589.MOV                                  |       1.09 GB |        0 files
+       > Amsterdam - North Holland, August 4, 201      |       1.27 GB |      268 files
+     > iPhone7-Photos-Export                         |      27.94 GB |     7646 files
+       > Colliers Mills - Lawrence Township, Sept      |       1.02 GB |      504 files
+       > October 31, 2017                              |       1.04 GB |      164 files
+       > 20180827 - August 27, 2018                    |       1.08 GB |      182 files
+     > iPhoneXIPro-ImageCapture-Import               |      10.27 GB |     1368 files
+     > Google Photos Downloads                       |       1.33 GB |      222 files
+   > Volumes                                       |      91.89 GB |   131403 files
+     > OneTouch 4                                    |      91.89 GB |   131403 files
+       > other videos                                  |       1.36 GB |        2 files
+         > The.Babysitter.DVDRip.XviD-STARLETS           |       1.36 GB |        2 files
+       > NAI Portable HDD temp                         |      90.04 GB |   131331 files
+         > EFinn Backup                                  |       5.17 GB |    11588 files
+         > CS55-CS6 Mac                                  |       5.65 GB |        9 files
+         > Drive H-G Diffs                               |      20.30 GB |    65663 files
+         > CS6                                           |      10.65 GB |     1094 files
+         > Linda                                         |       2.22 GB |        1 files
+         > cpiazza                                       |       3.87 GB |     3750 files
+         > ncohen.archive                                |       3.09 GB |     7800 files
+         > ~~moved from SAMSUNG                          |      20.79 GB |    19174 files
+         > llopez                                        |       6.02 GB |     3427 files
+         > tedparcel                                     |       9.89 GB |    17458 files
+   > DELL1TB02-Copies                              |      23.61 GB |    35035 files
+     > Time Machine Backup                           |      23.55 GB |    34777 files
+       > !!RAID                                        |       4.00 GB |     5779 files
+         > !!ebooks                                      |       2.28 GB |      471 files
+       > Copy of freenas                               |      15.69 GB |    17715 files
+         > 01-Bin                                        |       5.07 GB |     2816 files
+         > 00-Projects                                   |       6.74 GB |     7561 files
+       > Users                                         |       3.86 GB |    11283 files
+         > nickolaycohen                                 |       3.86 GB |    11283 files
+   > Archives                                      |     173.18 GB |   189337 files
+     > Pictures Raw Sources                          |       4.53 GB |      970 files
+       > 20170319 - Philla Flower Show                 |       4.53 GB |      970 files
+     > Duplicate Photos Removed by PhotoSweeper      |       7.35 GB |     2769 files
+     > Win bins                                      |       1.70 GB |     1576 files
+     > Google+ Backup Download                       |       6.16 GB |    14476 files
+       > Takeout                                       |       6.16 GB |    14476 files
+         > Google+ Stream                                |       6.16 GB |    14469 files
+     > Bin-NotInUse                                  |      11.02 GB |    68191 files
+       > Microsoft Office Professional Plus 2010       |       1.19 GB |        4 files
+         > en_office_professional_plus_2010_with_sp      |       1.19 GB |        0 files
+       > CS4 Masters                                   |       8.08 GB |    67809 files
+         > payloads                                      |       5.27 GB |     1135 files
+         > extensions                                    |       2.77 GB |    66600 files
+     > Ruby On Rails 3 Tutorial - Learn Rails B      |       7.38 GB |      108 files
+       > data                                          |       7.37 GB |       80 files
+     > dev                                           |       1.68 GB |        3 files
+     > Duplicate Photos                              |       2.64 GB |     5630 files
+     > Movies                                        |      19.81 GB |       44 files
+       > Star Wars Episode VII - The Force Awaken      |       2.11 GB |        2 files
+         > Star.Wars.Episode.VII.-.The.Force.Awaken      |       2.11 GB |        0 files
+       > Fences (2016) [1080p] [YTS.AG]                |       2.09 GB |        2 files
+         > Fences.2016.1080p.BluRay.x264-[YTS.AG].m      |       2.09 GB |        0 files
+       > Gifted (2017) [1080p] [YTS.AG]                |       1.54 GB |        2 files
+         > Gifted.2017.1080p.BluRay.x264-[YTS.AG].m      |       1.54 GB |        0 files
+       > Despicable Me 3 (2017) [1080p] [YTS.AG]       |       1.36 GB |        2 files
+         > Despicable.Me.3.2017.1080p.BluRay.x264-[      |       1.36 GB |        0 files
+       > Alvin And The Chipmunks (2007) [1080p]        |       1.39 GB |        2 files
+         > Alvin.And.The.Chipmunks.2007.1080p.BluRa      |       1.39 GB |        0 files
+       > Lion (2016) [1080p] [YTS.AG]                  |       1.81 GB |        2 files
+         > Lion.2016.1080p.BluRay.x264-[YTS.AG].mp4      |       1.81 GB |        0 files
+       > Spotlight (2015) [1080p] [YTS.AG]             |       1.96 GB |        2 files
+         > Spotlight.2015.1080p.BluRay.x264-[YTS.AG      |       1.96 GB |        0 files
+       > McLaren (2016) [1080p] [YTS.AG]               |       1.43 GB |        2 files
+         > McLaren.2016.1080p.BluRay.x264-[YTS.AG].      |       1.43 GB |        0 files
+       > Prince of Persia The Sands of Time (2010      |       1.37 GB |        7 files
+         > Prince of Persia The Sands of Time (2010      |       1.37 GB |        0 files
+       > Paddington (2014) [1080p]                     |       1.44 GB |        2 files
+         > Paddington.2014.1080p.BluRay.x264.YIFY.m      |       1.43 GB |        0 files
+       > Get Him to the Greek (2010) DVDRip XviD-      |       1.36 GB |        7 files
+         > Get Him to the Greek (2010) DVDRip XviD-      |       1.36 GB |        0 files
+     > Google Photos Removed                         |       9.84 GB |     2234 files
+       > 20170823 - Barcelona Day 2                    |       9.84 GB |     2234 files
+     > repos                                         |       4.77 GB |       63 files
+       > project-part1                                 |       4.76 GB |       34 files
+         > MAH00130.MP4                                  |       2.03 GB |        0 files
+         > savedFile.xls                                 |       1.86 GB |        0 files
+     > Formula1 Season 2009                          |      13.63 GB |       16 files
+       > 05                                            |       1.71 GB |        2 files
+         > Formula 1 - 2009 Spanish Grand Prix Live      |       1.71 GB |        2 files
+       > 03                                            |       1.79 GB |        2 files
+         > Formula 1 - 2009 Chinese Grand Prix Live      |       1.79 GB |        2 files
+       > 02                                            |       1.81 GB |        2 files
+         > Formula 1 - 2009 Malaysian Grand Prix Li      |       1.81 GB |        2 files
+       > 04                                            |       1.58 GB |        2 files
+         > Formula 1 - 2009 Bahrain Grand Prix Live      |       1.58 GB |        2 files
+       > 01                                            |       1.68 GB |        2 files
+         > Formula 1 - 2009 Australian Grand Prix L      |       1.68 GB |        2 files
+       > 17                                            |       1.25 GB |        1 files
+         > F1.Abu.Dhabi.GP.Race.Tenac.OBO.DaRmEtH.a      |       1.25 GB |        0 files
+       > 16                                            |       1.27 GB |        1 files
+         > F1.Brazil.GP.2009.Race.DaRmEtH.mkv            |       1.27 GB |        0 files
+       > 06                                            |       1.58 GB |        2 files
+         > Formula 1 - 2009 Monaco Grand Prix Live       |       1.58 GB |        2 files
+     > Duplicate Photos Fixer Pro - Thrashed De      |       9.30 GB |     3770 files
+       > May 30, 2017                                  |       4.79 GB |      856 files
+     > Items removed from iPhone XI Photos app       |      11.11 GB |     1322 files
+       > 20171007 - October 7, 2017                    |       1.27 GB |       43 files
+       > 20170804 - Amsterdam - North Holland, Au      |       1.27 GB |      268 files
+       > 20170910 - Colliers Mills - Lawrence Tow      |       1.02 GB |      504 files
+       > 20171104 - November 4, 2017                   |       1.12 GB |        3 files
+       > 20171014 - Basketball Practice                |       1.16 GB |       12 files
+       > 20170813 - Sofia - Malinova Dolina - Sof      |       1.10 GB |        5 files
+         > IMG_0589.MOV                                  |       1.09 GB |        0 files
+       > 20171028 - Basketball Practice                |       1.62 GB |       19 files
+     > Formula1 Season 2010                          |       8.97 GB |       12 files
+       > 17                                            |       2.52 GB |        5 files
+         > Formula 1 - 2010 Korean Grand Prix Race       |       2.52 GB |        5 files
+       > 10                                            |       2.19 GB |        1 files
+         > 433-f1.2010.british.gp.ws.pdtv.xvid.avi       |       2.19 GB |        0 files
+       > 16                                            |       1.17 GB |        1 files
+         > Formula.1.2010.-.Japanese.Grand.Prix.WS.      |       1.17 GB |        0 files
+       > 11                                            |       1.41 GB |        1 files
+         > F1.Germany-Hockenheim.2010.[WWW.MOVIEJOC      |       1.41 GB |        0 files
+       > 02                                            |       1.68 GB |        4 files
+         > Formula 1 Australian Grand Prix Race 201      |       1.68 GB |        4 files
+     > Items removed from iPhone 7 Photos app        |       3.27 GB |      278 files
+       > Amsterdam - North Holland, August 4, 201      |       1.27 GB |      268 files
+       > 20170813 - Sofia - Malinova Dolina - Sof      |       1.10 GB |        5 files
+         > IMG_0589.MOV                                  |       1.09 GB |        0 files
+     > !fonts                                        |       2.12 GB |    52937 files
+     > Diplucates Photos Removed by TK               |       2.32 GB |     1314 files
+     > Duplicate Photos Removed by Photosweeper      |       1.56 GB |      516 files
+     > Benny School Docs                             |       5.30 GB |      285 files
+       > Recordings Audio                              |       4.17 GB |       80 files
+     > Duplicate photos removed                      |       5.19 GB |     1214 files
+       > MOV with existing JPG                         |       5.17 GB |     1145 files
+     > nickolay.cohen@gmail.com cleanup              |       2.31 GB |      452 files
+       > Photos                                        |       1.93 GB |      448 files
+     > dmg                                           |      27.04 GB |    22854 files
+       > Microsoft.Office.For.Mac.Standard.2011-X      |       1.02 GB |        4 files
+       > Adobe Lightroom Classic CC 7.5.0.10           |       1.62 GB |      467 files
+         > Adobe Lightroom Classic CC 7.5.0.10           |       1.62 GB |      467 files
+       > Lrc-9.4                                       |       1.33 GB |        1 files
+         > Adobe_Lightroom_Claccic_v9.4__TNT_Torren      |       1.33 GB |        0 files
+       > Adobe CS6 Master Collection With Crack -      |       6.66 GB |       13 files
+         > MasterCollection_CS6_LS16.dmg                 |       6.65 GB |        0 files
+       > MATLAB                                        |       7.18 GB |     7357 files
+         > archives                                      |       6.86 GB |     5090 files
+       > Google+ Backup Download                       |       6.16 GB |    14476 files
+         > Takeout                                       |       6.16 GB |    14476 files
+     > Duplicate Photos Fixer Pro - thrashed it      |       2.62 GB |     4951 files
+-------------------------------------------------------------------------------------
+
+DEVICE: iPhone (5) (R01563807439000950037)
+   > Photos                                        |      70.49 GB |    31669 files
+     > Canon EOS Rebel T7                            |      10.28 GB |     1392 files
+     > Recently Added                                |      53.20 GB |    25872 files
+     > Saved Camera Roll                             |       5.27 GB |     2832 files
+   > Videos                                        |     125.15 GB |     1906 files
+     > Imaging Edge Mobile                           |       5.73 GB |       32 files
+     > SavedViseos                                   |       9.30 GB |      152 files
+     > Saved Camera Roll                             |       9.30 GB |      152 files
+     > Recently Added                                |      99.91 GB |     1568 files
+-------------------------------------------------------------------------------------
+
+DEVICE: Nickolay's iPad (R01563846082000493096)
+   > Videos                                        |       1.31 GB |       27 files
+     > Recently Added                                |       1.31 GB |       27 files
+-------------------------------------------------------------------------------------
+
+DEVICE: ASUS (D01567232251000246054)
+   > C                                             |     242.67 GB |   616324 files
+     > DELL1TB02                                     |      79.78 GB |    89086 files
+       > Lee Backup                                    |      33.08 GB |    28591 files
+         > Desktop                                       |       2.40 GB |    12220 files
+         > Documents                                     |       5.33 GB |     3453 files
+         > Pictures                                      |      11.46 GB |     3799 files
+         > Kodak Pictures                                |      11.73 GB |     7500 files
+       > 2013-12-05_D                                  |       9.93 GB |    35217 files
+         > Program Files (x86)                           |       3.90 GB |    22624 files
+         > Users                                         |       1.88 GB |     4732 files
+         > Program Files                                 |       1.87 GB |     4684 files
+         > ProgramData                                   |       1.65 GB |     2991 files
+       > Olga                                          |       2.11 GB |     2804 files
+       > Documents And Settings                        |      34.63 GB |    22286 files
+         > All Users                                     |      12.83 GB |     5583 files
+         > Ljubomir Stojanov                             |      21.78 GB |    16604 files
+     > Niki                                          |      42.23 GB |    69410 files
+       > Media Server Movies                           |      10.13 GB |       18 files
+         > Black Swan 2010                               |       2.20 GB |        4 files
+         > Revolutionary Road 2008                       |       1.37 GB |        3 files
+         > True Grit 2010                                |       1.20 GB |        1 files
+         > Stolen 2012                                   |       2.63 GB |        1 files
+         > 8.0 TT Closer To The Edge 2011                |       2.40 GB |        3 files
+       > 01-Bin                                        |      32.10 GB |    69392 files
+         > 01-Downloaded                                 |      13.59 GB |      792 files
+         > iso                                           |       7.23 GB |        8 files
+         > 02-In-use                                     |      11.28 GB |    68585 files
+     > MS Backup Restore                             |       1.35 GB |    12934 files
+       > C                                             |       1.35 GB |    12934 files
+         > Users                                         |       1.35 GB |    12934 files
+     > RAID2                                         |      76.22 GB |   420586 files
+       > RAID1                                         |      76.22 GB |   420586 files
+         > E521 Daily Backup                             |       7.30 GB |     7168 files
+         > Unorded Media                                 |       7.23 GB |       29 files
+         > Camera Movies                                 |       2.49 GB |        6 files
+         > ~~Maxtor                                      |       1.80 GB |     9953 files
+         > Asus Final Data                               |       6.40 GB |   205679 files
+         > iMac Backup                                   |       1.26 GB |     2622 files
+         > trashbox archive                              |       1.92 GB |    24140 files
+         > Asus Settings                                 |       1.26 GB |     1343 files
+         > 01-Bin                                        |      10.34 GB |    36062 files
+         > ~~4Gb-cruzer                                  |       1.77 GB |     1833 files
+         > !Manuals                                      |       2.21 GB |    18243 files
+         > 00-Projects                                   |       3.25 GB |     1652 files
+         > ebooks                                        |       1.53 GB |     6596 files
+         > Ruby On Rails 3 Tutorial - Learn Rails B      |       7.39 GB |      182 files
+         > GFIBackup-Sel                                 |       2.30 GB |    24840 files
+         > E521 Backup 20111104                          |       1.26 GB |      891 files
+         > ~~4GB-SanDisk                                 |       2.21 GB |    10953 files
+         > trashbox                                      |       4.49 GB |     9829 files
+         > !fonts                                        |       1.68 GB |    30306 files
+     > Users                                         |      33.61 GB |    11561 files
+       > Benny                                         |      33.61 GB |    11561 files
+         > Downloads                                     |       2.44 GB |     2423 files
+         > Files from Samsung Mini                       |       7.25 GB |     1994 files
+         > Pictures                                      |      22.95 GB |     5746 files
+     > ASUS Restore                                  |       8.98 GB |    11129 files
+       > 2015-06-16                                    |       8.88 GB |    10557 files
+         > C                                             |       8.88 GB |    10557 files
+-------------------------------------------------------------------------------------
+
+DEVICE: BENNY-ASUS-PC_1 (D01567473394000932522)
+-------------------------------------------------------------------------------------
+
+DEVICE: BENNY-ASUS-PC_2 (D01567900303000721746)
+   > C                                             |     270.89 GB |   523213 files
+     > ProgramData                                   |       2.61 GB |     1515 files
+       > Microsoft                                     |       2.15 GB |      709 files
+         > Search                                        |       1.97 GB |       79 files
+     > iDrive-Backup-Restore-ASUS                    |     171.37 GB |   434707 files
+       > BAK                                           |       7.30 GB |     7166 files
+         > E521 Daily Backup                             |       7.30 GB |     7166 files
+       > Foreign Pictures                              |      23.19 GB |    11298 files
+         > Lee                                           |      23.19 GB |    11298 files
+       > Reference                                     |      10.69 GB |    18570 files
+         > DreamWeaver CS4                               |       2.15 GB |    18234 files
+         > linda.com Dreamweaver CS4                     |       1.09 GB |      147 files
+         > Ruby On Rails 3 Tutorial - Learn Rails B      |       7.39 GB |      182 files
+       > Bin                                           |      37.82 GB |    82598 files
+         > PC                                            |      31.86 GB |    69440 files
+         > MAC                                           |       5.96 GB |    13158 files
+       > Dev                                           |       1.02 GB |   178352 files
+         > Ruby192.nai                                   |       1.02 GB |   178352 files
+       > Pictures                                      |      35.74 GB |    15338 files
+         > Benny                                         |      33.25 GB |     9348 files
+         > Niki                                          |       2.42 GB |     5934 files
+       > C                                             |      41.22 GB |   118992 files
+         > MS Backup Restore                             |       1.35 GB |    12934 files
+         > RAID2                                         |      14.61 GB |    62283 files
+         > ASUS Restore                                  |       8.98 GB |    11129 files
+         > DELL1TB02                                     |      12.40 GB |    28396 files
+         > Users                                         |       3.13 GB |     2619 files
+       > Media                                         |       8.32 GB |      167 files
+         > Jeff.Dunham.Birth.of.a.Dummy.2011.REPACK      |       2.46 GB |        3 files
+         > The Jeff Dunham Show - The Complete Seas      |       1.20 GB |        8 files
+         > mp3                                           |       1.09 GB |      140 files
+       > Camera Movies                                 |       2.49 GB |        6 files
+         > disk#1.m4v                                    |       1.08 GB |        0 files
+         > disk#3.m4v                                    |       1.13 GB |        0 files
+       > Projects                                      |       3.25 GB |     1652 files
+         > kingstouch                                    |       1.70 GB |      610 files
+     > iDrive-Backup-Restore-ASUS-2                  |      55.26 GB |    23764 files
+       > Niki and Benny Pictures                       |      51.09 GB |    23680 files
+         > ASUS Restore                                  |       7.13 GB |     1404 files
+         > Users                                         |      30.26 GB |     7825 files
+         > RAID2                                         |      13.20 GB |    14075 files
+       > Benny Audio                                   |       4.17 GB |       80 files
+         > FOLDER01                                      |       4.17 GB |       80 files
+     > Users                                         |      40.83 GB |    31227 files
+       > Benny                                         |      40.72 GB |    30554 files
+         > Files from Samsung Mini                       |       7.26 GB |     1994 files
+         > AppData                                       |       6.35 GB |    20250 files
+         > Downloads                                     |       2.16 GB |      340 files
+         > Pictures                                      |      22.95 GB |     5747 files
+-------------------------------------------------------------------------------------
+
+DEVICE: LAPTOP-BRBMTA5B (D01599278876000183928)
+   > C                                             |      21.16 GB |     8045 files
+     > Users                                         |      21.16 GB |     8045 files
+       > milen                                         |      21.16 GB |     8045 files
+         > Downloads                                     |       4.97 GB |      436 files
+         > OneDrive                                      |       2.35 GB |     3945 files
+         > Desktop                                       |      12.73 GB |      460 files
+         > Documents                                     |       1.11 GB |     3187 files
+-------------------------------------------------------------------------------------
+
+DEVICE: iPhone (3) (R01607197738000636951)
+   > Photos                                        |      49.95 GB |    27895 files
+     > Recently Added                                |      49.88 GB |    27803 files
+   > Videos                                        |      71.28 GB |     1651 files
+     > Recently Added                                |      71.24 GB |     1644 files
+-------------------------------------------------------------------------------------
+
+DEVICE: IDrive Photos (R01663474652000128789)
+-------------------------------------------------------------------------------------
+
+DEVICE: NickolaysMacmini (D01692572940000295373)
+   > Volumes                                       |    2725.12 GB |  1966572 files
+     > Extreme Pro                                   |    2725.12 GB |  1966572 files
+       > Photos Library                                |    1894.42 GB |  1528227 files
+         > All-2004.photoslibrary                        |       3.41 GB |     7895 files
+         > All-2008                                      |       2.56 GB |     6504 files
+         > All-2008.photoslibrary                        |       2.61 GB |     7117 files
+         > All-Media.photoslibrary                       |    1610.47 GB |  1182498 files
+         > All-2005.photoslibrary                        |       2.84 GB |    11222 files
+         > Samsung.photoslibrary                         |       5.86 GB |    24733 files
+         > Samuil.photoslibrary                          |     257.03 GB |   261251 files
+         > All-2009.photoslibrary                        |       2.22 GB |     5875 files
+         > All-2006.photoslibrary                        |       1.73 GB |     5761 files
+         > All-2007.photoslibrary                        |       5.02 GB |    13297 files
+       > iDrive Restore MacBookPro                     |     322.84 GB |   200521 files
+         > NickolaysMacmini                              |     322.84 GB |   200521 files
+       > iDrive Restore MacBookPro Export              |     199.60 GB |    54839 files
+         > Backup of Photos from iPhoneSE 9May2021       |      78.16 GB |    22855 files
+         > iPhone13ProMax                                |      58.07 GB |    16070 files
+         > Benny iPhone Download 05292017                |      63.37 GB |    15914 files
+       > ~imported to iMini Photos                     |     266.80 GB |    62695 files
+         > iMac iDrive restore imported to Photos        |     266.80 GB |    62695 files
+       > Photos Split                                  |      40.80 GB |   120013 files
+         > 2000-2007                                     |      14.79 GB |    29052 files
+         > 2000-2007.photoslibrary                       |      26.01 GB |    90961 files
+   > Users                                         |      76.30 GB |    48533 files
+     > nickolaycohen                                 |      76.30 GB |    48533 files
+       > Pictures                                      |      75.29 GB |    47871 files
+         > iPhone11Pro.photoslibrary                     |       1.60 GB |      839 files
+         > Samuil.photoslibrary                          |      73.12 GB |    46502 files
+-------------------------------------------------------------------------------------
+
+DEVICE: Milena’s iPad (R01733266910000709467)
+-------------------------------------------------------------------------------------
+
+DEVICE: NickolaysMacBookPro2 (D01740009573000135005)
+   > Users                                         |     112.24 GB |    67630 files
+     > nickolaycohen                                 |     112.24 GB |    67630 files
+       > Pictures                                      |     112.23 GB |    67627 files
+         > Apple Photo Exports                           |      52.25 GB |    16414 files
+         > Benny iPhone 16 Pro.photoslibrary             |      28.00 GB |    21876 files
+         > Samouil.photoslibrary                         |      11.61 GB |    22474 files
+         > Benny Red IPhone.photoslibrary                |      17.71 GB |     1759 files
+         > Photos Library MBPM4Pro.photoslibrary         |       2.42 GB |     4083 files
+-------------------------------------------------------------------------------------
+
+Audit complete. Results saved to idrive_audit_report.txt
