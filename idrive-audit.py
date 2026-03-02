@@ -27,6 +27,8 @@ from urllib3.util.retry import Retry
 # python3 idrive-audit.py --start-folder /C/RAID2 --device-filter D01567232251000246054 --max-depth 1
 # python3 idrive-audit.py --start-folder /C/RAID2/RAID1 --device-filter D01567232251000246054 --max-depth 1
 # python3 idrive-audit.py --start-folder /Users/nickolaycohen/Pictures  --device-filter D01692572940000295373 --max-depth 1
+# python3 idrive-audit.py --tag /Volumes/Extreme\ Pro/Photos\ Library/All-Media.photoslibrary  --device-filter D01692572940000295373 
+# python3 idrive-audit.py --device-filter D01692572940000295373 --tag "/Volumes/Extreme\ Pro/Photos\ Library/All-Media.photoslibrary=PhotosLibrary-All-Media"
 
  
 
@@ -102,13 +104,55 @@ cur.execute(
         filecount INTEGER,
         lmd TEXT,
         response_json TEXT,
-        drilled INTEGER DEFAULT 0
+        drilled INTEGER DEFAULT 0,
+        tag TEXT DEFAULT ''
     )
     '''
 )
 # ensure columns exist for older databases
 cur.execute("PRAGMA table_info(api_calls)")
-cols = [row['name'] for row in cur.fetchall()]
+rows = cur.fetchall()
+cols = [row['name'] for row in rows]
+# if tag column exists but is not TEXT, rebuild table with correct affinity
+for row in rows:
+    if row['name'] == 'tag' and row['type'].upper() != 'TEXT':
+        print("migrating tag column to TEXT affinity")
+        # rename existing table and recreate with new schema
+        cur.execute("ALTER TABLE api_calls RENAME TO api_calls_old")
+        cur.execute(
+            '''
+            CREATE TABLE api_calls (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TEXT NOT NULL,
+                device_id TEXT,
+                device_name TEXT,
+                endpoint TEXT,
+                path TEXT,
+                size INTEGER,
+                filecount INTEGER,
+                lmd TEXT,
+                response_json TEXT,
+                drilled INTEGER DEFAULT 0,
+                tag TEXT DEFAULT ''
+            )
+            '''
+        )
+        # copy data over (tag value will be cast to text automatically)
+        cur.execute(
+            '''
+            INSERT INTO api_calls (id,timestamp,device_id,device_name,endpoint,path,size,filecount,lmd,response_json,drilled,tag)
+            SELECT id,timestamp,device_id,device_name,endpoint,path,size,filecount,lmd,response_json,drilled,tag
+            FROM api_calls_old
+            '''
+        )
+        cur.execute("DROP TABLE api_calls_old")
+        conn.commit()
+        # refresh rows/cols
+        cur.execute("PRAGMA table_info(api_calls)")
+        rows = cur.fetchall()
+        cols = [r['name'] for r in rows]
+        break
+
 if 'device_name' not in cols:
     cur.execute('ALTER TABLE api_calls ADD COLUMN device_name TEXT')
     conn.commit()
@@ -117,6 +161,10 @@ if 'lmd' not in cols:
     conn.commit()
 if 'drilled' not in cols:
     cur.execute('ALTER TABLE api_calls ADD COLUMN drilled INTEGER DEFAULT 0')
+    conn.commit()
+if 'tag' not in cols:
+    # add TEXT column defaulting to empty string
+    cur.execute("ALTER TABLE api_calls ADD COLUMN tag TEXT DEFAULT ''")
     conn.commit()
 conn.commit()
 
@@ -364,16 +412,51 @@ def crawl(device_id, device_name, current_path, depth, max_depth=MAX_DEPTH, igno
 # toggle verbose skip debugging
 SKIP_DEBUG = True
 
-def should_skip(device_id, path, endpoint='browseFolder', hours=24):
-    """Return True if the given device/path/endpoint was logged within the last
-    `hours` hours so we can avoid redundant API calls.
+def tag_folder(device_id, device_name, path, tag_value):
+    """Mark the given device/path as tagged with a text value.
 
-    When SKIP_DEBUG is True the result of the check is printed for visibility.
+    Prefer tagging an existing getProperties row (since that contains the
+    authoritative size info); if none exists, fall back to any recent row.  If
+    no record exists at all, insert a new row with endpoint set to
+    "getProperties" so the tag can be associated with the real metadata.
+    Empty string means untagged.
+    """
+    norm = normalize_path(path)
+    # try to find a getProperties record first
+    cur.execute(
+        "SELECT id FROM api_calls WHERE device_id=? AND path=? AND endpoint='getProperties' ORDER BY timestamp DESC LIMIT 1",
+        (device_id, norm)
+    )
+    existing = cur.fetchone()
+    if not existing:
+        # fall back to any endpoint
+        cur.execute(
+            "SELECT id FROM api_calls WHERE device_id=? AND path=? ORDER BY timestamp DESC LIMIT 1",
+            (device_id, norm)
+        )
+        existing = cur.fetchone()
+    if existing:
+        cur.execute("UPDATE api_calls SET tag=? WHERE id=?", (tag_value, existing['id']))
+    else:
+        # insert a new row with endpoint=getProperties so the record is included
+        cur.execute(
+            "INSERT INTO api_calls (timestamp, device_id, device_name, endpoint, path, tag) VALUES (?, ?, ?, 'getProperties', ?, ?)",
+            (datetime.utcnow().isoformat(), device_id, device_name, norm, tag_value)
+        )
+    conn.commit()
+
+
+def should_skip(device_id, path, endpoint='browseFolder', hours=24):
+    """Return True if the given device/path/endpoint should be skipped.
+
+    Skipping occurs if the path is explicitly tagged or if a recent API call
+    exists within the last ``hours`` hours.  ``SKIP_DEBUG`` prints the
+    reasoning.
     """
     # normalize path for lookup
     norm = normalize_path(path)
     cur.execute(
-        "SELECT timestamp FROM api_calls "
+        "SELECT timestamp, tag FROM api_calls "
         "WHERE device_id=? AND path=? AND endpoint=? "
         "ORDER BY timestamp DESC LIMIT 1",
         (device_id, norm, endpoint)
@@ -383,6 +466,10 @@ def should_skip(device_id, path, endpoint='browseFolder', hours=24):
         if SKIP_DEBUG:
             print(f"should_skip: no prior record for {endpoint} {norm} ({device_id})")
         return False
+    if row['tag'] not in (None, "", "0"):
+        if SKIP_DEBUG:
+            print(f"should_skip: {norm} ({device_id}) is tagged ({row['tag']}), skipping")
+        return True
     try:
         last = datetime.fromisoformat(row['timestamp'])
     except Exception:
@@ -455,7 +542,45 @@ if __name__ == "__main__":
     parser.add_argument("--max-depth", type=int, default=MAX_DEPTH,
                         help=f"Maximum recursion depth (default {MAX_DEPTH})")
 
+    # tagging operations
+    parser.add_argument("--tag", help="Mark a device/path as tagged (format path[=value], value optional)")
+    parser.add_argument("--untag", help="Remove the tag from a device/path")
+    parser.add_argument("--list-tags", action="store_true",
+                        help="Print all tagged paths for matching device")
+
     args = parser.parse_args()
     print(f"Parsed parameters: {args}")
+
+    # handle tag/untag/list requests and exit before crawling
+    if args.tag or args.untag or args.list_tags:
+        for dev in RAW_DEVICES:
+            if args.device_filter:
+                if args.device_filter.lower() not in dev['device_id'].lower() and \
+                   args.device_filter.lower() not in dev['nick_name'].lower():
+                    continue
+            if args.tag:
+                # --tag may include an '=' to separate path and tag value
+                tag_arg = args.tag
+                if '=' in tag_arg:
+                    thepath, theval = tag_arg.split('=', 1)
+                else:
+                    thepath, theval = tag_arg, ''
+                # remove shell-escaped spaces/backslashes before normalizing
+                thepath = thepath.replace('\\', '')
+                tag_folder(dev['device_id'], dev['nick_name'], thepath, theval)
+                print(f"Tagged {thepath} (value='{theval}') on {dev['nick_name']} ({dev['device_id']})")
+            if args.untag:
+                norm = normalize_path(args.untag)
+                cur.execute("UPDATE api_calls SET tag='' WHERE device_id=? AND path=?", (dev['device_id'], norm))
+                conn.commit()
+                print(f"Removed tag from {args.untag} on {dev['nick_name']} ({dev['device_id']})")
+            if args.list_tags:
+                cur.execute("SELECT path,tag FROM api_calls WHERE device_id=? AND tag<>''", (dev['device_id'],))
+                rows = cur.fetchall()
+                print(f"Tagged paths for {dev['nick_name']} ({dev['device_id']}):")
+                for r in rows:
+                    print("  ", r['path'], "->", repr(r['tag']))
+        conn.close()
+        sys.exit(0)
 
     run_audit(start_folder=args.start_folder, one_level=args.one_level, device_filter=args.device_filter, max_depth=args.max_depth)
