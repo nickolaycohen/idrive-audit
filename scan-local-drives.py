@@ -201,6 +201,12 @@ def init_db():
     table_exists = cursor2.fetchone() is not None
 
     if table_exists:
+        # Ensure last_modified column exists before potentially migrating
+        if "last_modified" not in columns:
+            print("Adding last_modified column to folders table...")
+            conn.execute("ALTER TABLE folders ADD COLUMN last_modified REAL")
+            conn.commit()
+
         # Check for UNIQUE constraint on device_id and path
         cursor3 = conn.execute("PRAGMA index_list(folders)")
         indexes = cursor3.fetchall()
@@ -224,10 +230,9 @@ def init_db():
                     UNIQUE(device_id, path)
                 )
             """)
-            # Note: Migration from old schema without last_modified column
             conn.execute("""
-                INSERT INTO folders_new (folder_id, device_id, path, size_bytes, last_scanned, needs_backup, needs_tag, notes)
-                SELECT folder_id, device_id, path, size_bytes, last_scanned, needs_backup, needs_tag, notes
+                INSERT INTO folders_new (folder_id, device_id, path, size_bytes, last_modified, last_scanned, needs_backup, needs_tag, notes)
+                SELECT folder_id, device_id, path, size_bytes, last_modified, last_scanned, needs_backup, needs_tag, notes
                 FROM (
                     SELECT *, ROW_NUMBER() OVER (PARTITION BY device_id, path ORDER BY last_scanned DESC) as rn
                     FROM folders
@@ -262,8 +267,8 @@ def init_db():
 
 def tag_folder(conn, device_id, path, tag_name, needs_backup=1):
     conn.execute("""
-        INSERT INTO folders (device_id, path, needs_tag, needs_backup, last_scanned)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO folders (device_id, path, needs_tag, needs_backup, last_scanned, size_bytes, last_modified)
+        VALUES (?, ?, ?, ?, ?, 0, 0)
         ON CONFLICT(device_id, path) DO UPDATE SET needs_tag=excluded.needs_tag, needs_backup=excluded.needs_backup
     """, (device_id, path, tag_name, needs_backup, datetime.now(timezone.utc)))
     conn.commit()
@@ -511,4 +516,3 @@ if __name__ == "__main__":
 # to tag a specific folder: python3 scan-local-drives.py --tag "/Volumes/Backup/Photos=Needs Backup"
 # python3 scan-local-drives.py --scan --path "/Volumes/asd/projects"  (to scan just a specific folder)
 # python3 scan-local-drives.py --report --output local_audit_report.txt (run report and save to file)
-
