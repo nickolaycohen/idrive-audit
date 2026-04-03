@@ -66,54 +66,60 @@ def detect_device_type(info):
         return "external_drive"
     return "unknown"
 
-def scan_folder(path, depth=1):
+def scan_folder(path, min_size_gb=1.0, depth=None):
     """
-    Calculate the size of the folder at the given path up to the specified depth.
-    Returns total_bytes, used_bytes, free_bytes (used_bytes == total_bytes for folder).
+    Calculate the size of the folder and all sub-folders at the given path.
+    If depth is None (default), it scans recursively for an accurate audit.
+    Returns (total_bytes, found_folders_dict, free_bytes).
+    found_folders_dict maps path -> recursive_size_bytes for significant folders.
     """
-    total_size = 0
+    folder_accum = {} # path -> size
     try:
-        if depth == 0:
-            # No scanning, size 0
-            return 0, 0, None
-        elif depth == 1:
-            # Sum sizes of immediate files and immediate subdirectories (non-recursive)
-            with os.scandir(path) as it:
-                for entry in it:
-                    try:
-                        if entry.is_file(follow_symlinks=False):
-                            total_size += entry.stat(follow_symlinks=False).st_size
-                        elif entry.is_dir(follow_symlinks=False):
-                            # Sum sizes of immediate files inside this subdirectory only (one level down)
-                            try:
-                                with os.scandir(entry.path) as subit:
-                                    for subentry in subit:
-                                        if subentry.is_file(follow_symlinks=False):
-                                            total_size += subentry.stat(follow_symlinks=False).st_size
-                            except Exception as e:
-                                print(f"Could not access {entry.path}: {e}")
-                    except Exception as e:
-                        print(f"Could not access {entry.path}: {e}")
-        else:
-            # For depth > 1, fallback to full recursive os.walk
-            for dirpath, dirnames, filenames in os.walk(path):
+        for dirpath, dirnames, filenames in os.walk(path):
+            # Feedback: Show the current directory being processed (truncated for terminal width)
+            display_path = dirpath if len(dirpath) < 65 else f"...{dirpath[-62:]}"
+            sys.stdout.write(f"\r      > Auditing: {display_path:<65}")
+            sys.stdout.flush()
+
+            if depth is not None:
                 current_depth = dirpath[len(path):].count(os.sep)
                 if current_depth >= depth:
                     # Don't descend further
                     dirnames[:] = []
-                for f in filenames:
-                    fp = os.path.join(dirpath, f)
-                    try:
-                        if not os.path.islink(fp):
-                            total_size += os.path.getsize(fp)
-                    except Exception as e:
-                        print(f"Could not access {fp}: {e}")
+
+            this_dir_files = 0
+            for f in filenames:
+                fp = os.path.join(dirpath, f)
+                try:
+                    if not os.path.islink(fp):
+                        this_dir_files += os.path.getsize(fp)
+                except Exception:
+                    continue
+
+            # Propagate this directory's file sizes up to the scan root
+            curr = dirpath
+            while True:
+                folder_accum[curr] = folder_accum.get(curr, 0) + this_dir_files
+                if curr == path:
+                    break
+                parent = os.path.dirname(curr)
+                if parent == curr:
+                    break
+                curr = parent
+
     except Exception as e:
         print(f"Error scanning folder {path}: {e}")
-        return None, None, None
+        return 0, {}, None
+    finally:
+        # Clear the progress line after the walk finishes
+        sys.stdout.write(f"\r\033[K")
+        sys.stdout.flush()
 
-    free_bytes = None
-    return total_size, total_size, free_bytes
+    min_bytes = min_size_gb * (1024**3)
+    # Filter results: only return folders large enough to track in the DB
+    significant = {p: s for p, s in folder_accum.items() if s >= min_bytes}
+
+    return folder_accum.get(path, 0), significant, None
 
 # -------------------------
 # Database setup
@@ -217,24 +223,6 @@ def init_db():
 # Main scan logic
 # -------------------------
 
-def get_idrive_backup_info(path):
-    """Check the idrive_audit.db to see if this path (or similar) is backed up."""
-    if not os.path.exists(IDRIVE_DB_PATH):
-        return None
-    try:
-        idrive_conn = sqlite3.connect(IDRIVE_DB_PATH)
-        idrive_conn.row_factory = sqlite3.Row
-        cur = idrive_conn.cursor()
-        # Normalize path for comparison (IDrive paths are often absolute-ish)
-        # We search for any record where the path matches or ends with our local path
-        search_path = f"%{path.rstrip('/')}"
-        cur.execute("SELECT size, filecount, timestamp, tag FROM api_calls WHERE path LIKE ? ORDER BY timestamp DESC LIMIT 1", (search_path,))
-        row = cur.fetchone()
-        idrive_conn.close()
-        return row
-    except Exception:
-        return None
-
 def tag_folder(conn, device_id, path, tag_name, needs_backup=1):
     conn.execute("""
         INSERT INTO folders (device_id, path, needs_tag, needs_backup, last_scanned)
@@ -288,94 +276,146 @@ def main():
 
     if args.scan:
         print(f"Scanning drives on host: {hostname}...\n")
-        disks = subprocess.run(["diskutil", "list", "-plist"], capture_output=True, check=True)
-        disks_info = plistlib.loads(disks.stdout)
-
-        for disk in disks_info.get("AllDisksAndPartitions", []):
-            for part in disk.get("Partitions", []):
-                disk_id = part.get("DeviceIdentifier")
-                info_proc = subprocess.run(["diskutil", "info", "-plist", disk_id], capture_output=True, check=True)
+        
+        # UX: Check if this is the first time the script is being run
+        db_check = conn.execute("SELECT COUNT(*) FROM devices").fetchone()
+        if db_check and db_check[0] == 0:
+            print(">>> [NOTICE] This appears to be an initial scan. Building the baseline")
+            print(">>> may take several minutes. Progress is shown below.\n")
+        
+        target_disk_ids = []
+        if args.path:
+            try:
+                # Resolve the device identifier for the specific path provided
+                info_proc = subprocess.run(["diskutil", "info", "-plist", args.path], capture_output=True, check=True)
                 info = plistlib.loads(info_proc.stdout)
+                target_disk_ids = [info.get("DeviceIdentifier")]
+            except Exception as e:
+                print(f"Error: Could not resolve device for path {args.path}: {e}")
+                return
+        else:
+            disks = subprocess.run(["diskutil", "list", "-plist"], capture_output=True, check=True)
+            disks_info = plistlib.loads(disks.stdout)
+            target_disk_ids = disks_info.get("AllDisks", [])
 
-                mount_point = info.get("MountPoint")
-                if not mount_point:
+        # Iterate over targeted disk identifiers
+        for disk_id in target_disk_ids:
+            info_proc = subprocess.run(["diskutil", "info", "-plist", disk_id], capture_output=True, check=True)
+            info = plistlib.loads(info_proc.stdout)
+
+            mount_point = info.get("MountPoint")
+            if not mount_point:
+                continue
+
+            # Isolate primary internal drives (Macintosh HD) and user-mounted partitions.
+            # This filters out system helper volumes like Recovery, Preboot, and VM.
+            if info.get("Internal") and not args.path:
+                if mount_point != "/" and not mount_point.startswith("/Volumes/"):
+                    continue
+                if info.get("APFSVolumeRole") in ("Recovery", "VM", "Preboot", "Update"):
                     continue
 
-                abs_mount_point = os.path.abspath(mount_point)
+            name = info.get("VolumeName") or disk_id
+            uuid = info.get("VolumeUUID")
+            capacity = info.get("TotalSize")
+            device_type = detect_device_type(info)
 
-                name = info.get("VolumeName") or disk_id
-                uuid = info.get("VolumeUUID")
-                capacity = info.get("TotalSize")
-                device_type = detect_device_type(info)
+            total, used, free = get_disk_usage_from_info(info)
+            if total is None:
+                continue
 
-                total, used, free = get_disk_usage_from_info(info)
-                if total is None:
-                    continue
+            # Upsert device
+            conn.execute("""
+            INSERT INTO devices (
+                device_name, device_type, filesystem_uuid, capacity_bytes, last_seen
+            ) VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(filesystem_uuid) DO UPDATE SET last_seen=excluded.last_seen
+            """, (name, device_type, uuid, capacity, datetime.now(timezone.utc)))
 
-                # Upsert device
+            cursor = conn.execute("SELECT device_id FROM devices WHERE filesystem_uuid=?", (uuid,))
+            row = cursor.fetchone()
+            if row is None:
+                print(f"Could not find device_id for filesystem_uuid {uuid}, skipping folder scan")
+                continue
+            device_id = row[0]
+
+            # --- FIX: Prevent redundant usage records and keep only one entry per device ---
+            cursor_usage = conn.execute("""
+                SELECT usage_id, total_bytes, used_bytes, free_bytes 
+                FROM device_usage 
+                WHERE device_id = ? 
+                ORDER BY recorded_at DESC
+            """, (device_id,))
+            usage_entries = cursor_usage.fetchall()
+            
+            last_entry = usage_entries[0] if usage_entries else None
+
+            if last_entry is None or (last_entry[1] != total or last_entry[2] != used or last_entry[3] != free):
+                # Usage changed or first time: Delete all old entries to maintain "one entry per device"
+                conn.execute("DELETE FROM device_usage WHERE device_id = ?", (device_id,))
                 conn.execute("""
-                INSERT INTO devices (
-                    device_name, device_type, filesystem_uuid, capacity_bytes, last_seen
+                INSERT INTO device_usage (
+                    device_id, recorded_at, total_bytes, used_bytes, free_bytes
                 ) VALUES (?, ?, ?, ?, ?)
-                ON CONFLICT(filesystem_uuid) DO UPDATE SET last_seen=excluded.last_seen
-                """, (name, device_type, uuid, capacity, datetime.now(timezone.utc)))
+                """, (device_id, datetime.now(timezone.utc), total, used, free))
+                print(f"  Usage snapshot updated for {name}.")
+            else:
+                # Usage is the same. Prune any duplicate entries that might exist from previous runs.
+                if len(usage_entries) > 1:
+                    conn.execute("DELETE FROM device_usage WHERE device_id = ? AND usage_id != ?", (device_id, last_entry[0]))
+                    print(f"  Cleaned up {len(usage_entries) - 1} duplicate records for {name}.")
+                print(f"  Usage unchanged for {name}, skipping redundant snapshot.")
 
-                cursor = conn.execute("SELECT device_id FROM devices WHERE filesystem_uuid=?", (uuid,))
-                row = cursor.fetchone()
-                if row is None:
-                    print(f"Could not find device_id for filesystem_uuid {uuid}, skipping folder scan")
-                    continue
-                device_id = row[0]
+            print(f"{name} ({mount_point})")
+            print(f"  Type: {device_type}")
+            print(f"  Total: {total}")
+            print(f"  Used:  {used}")
+            print(f"  Free:  {free}\n")
 
-                # --- FIX: Prevent redundant usage records and keep only one entry per device ---
-                cursor_usage = conn.execute("""
-                    SELECT usage_id, total_bytes, used_bytes, free_bytes 
-                    FROM device_usage 
-                    WHERE device_id = ? 
-                    ORDER BY recorded_at DESC
-                """, (device_id,))
-                usage_entries = cursor_usage.fetchall()
-                
-                last_entry = usage_entries[0] if usage_entries else None
+            # --- Populate folders table ---
+            print(f"  Scanning folders on {mount_point}...")
+            
+            # Always add the mount point itself as a tracked entry to check if the whole drive is backed up
+            conn.execute("""
+                INSERT INTO folders (device_id, path, size_bytes, last_scanned)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(device_id, path) DO UPDATE SET 
+                    size_bytes=excluded.size_bytes, 
+                    last_scanned=excluded.last_scanned
+            """, (device_id, mount_point, used, datetime.now(timezone.utc)))
+            conn.commit()
 
-                if last_entry is None or (last_entry[1] != total or last_entry[2] != used or last_entry[3] != free):
-                    # Usage changed or first time: Delete all old entries to maintain "one entry per device"
-                    conn.execute("DELETE FROM device_usage WHERE device_id = ?", (device_id,))
-                    conn.execute("""
-                    INSERT INTO device_usage (
-                        device_id, recorded_at, total_bytes, used_bytes, free_bytes
-                    ) VALUES (?, ?, ?, ?, ?)
-                    """, (device_id, datetime.now(timezone.utc), total, used, free))
-                    print(f"  Usage snapshot updated for {name}.")
+            try:
+                # If a path is provided, we only scan that specific folder.
+                # Otherwise, we scan all top-level directories on the mount point.
+                if args.path:
+                    entries_to_scan = [args.path] if os.path.isdir(args.path) else []
                 else:
-                    # Usage is the same. Prune any duplicate entries that might exist from previous runs.
-                    if len(usage_entries) > 1:
-                        conn.execute("DELETE FROM device_usage WHERE device_id = ? AND usage_id != ?", (device_id, last_entry[0]))
-                        print(f"  Cleaned up {len(usage_entries) - 1} duplicate records for {name}.")
-                    print(f"  Usage unchanged for {name}, skipping redundant snapshot.")
+                    entries_to_scan = [e.path for e in os.scandir(mount_point) if e.is_dir() and not e.name.startswith('.')]
 
-                print(f"{name} ({mount_point})")
-                print(f"  Type: {device_type}")
-                print(f"  Total: {total}")
-                print(f"  Used:  {used}")
-                print(f"  Free:  {free}\n")
+                print(f"  Found {len(entries_to_scan)} top-level folders to audit on {name}.")
+                for i, path_to_scan in enumerate(entries_to_scan, 1):
+                    # Avoid scanning /Volumes when processing the root drive to prevent double-counting
+                    if mount_point == "/" and os.path.basename(path_to_scan) == "Volumes":
+                        continue
+                        
+                    print(f"    [{i}/{len(entries_to_scan)}] Processing: {path_to_scan}", end="", flush=True)
+                    size_bytes, found_folders, _ = scan_folder(path_to_scan, min_size_gb=args.min_size)
+                    size_gb = size_bytes / (1024**3) if size_bytes else 0
+                    print(f" -> {path_to_scan}: {size_gb:.2f} GB")
 
-                # --- Populate folders table ---
-                print(f"  Scanning folders on {mount_point}...")
-                try:
-                    for entry in os.scandir(mount_point):
-                        if entry.is_dir() and not entry.name.startswith('.'):
-                            size_bytes, _, _ = scan_folder(entry.path, depth=1)
-                            if size_bytes and (size_bytes / (1024**3)) >= args.min_size:
-                                conn.execute("""
-                                    INSERT INTO folders (device_id, path, size_bytes, last_scanned)
-                                    VALUES (?, ?, ?, ?)
-                                    ON CONFLICT(device_id, path) DO UPDATE SET 
-                                        size_bytes=excluded.size_bytes, 
-                                        last_scanned=excluded.last_scanned
-                                """, (device_id, entry.path, size_bytes, datetime.now(timezone.utc)))
-                except Exception as e:
-                    print(f"  Error scanning folders: {e}")
+                    if found_folders:
+                        for f_path, f_size in found_folders.items():
+                            conn.execute("""
+                                INSERT INTO folders (device_id, path, size_bytes, last_scanned)
+                                VALUES (?, ?, ?, ?)
+                                ON CONFLICT(device_id, path) DO UPDATE SET 
+                                    size_bytes=excluded.size_bytes, 
+                                    last_scanned=excluded.last_scanned
+                            """, (device_id, f_path, f_size, datetime.now(timezone.utc)))
+                        conn.commit()
+            except Exception as e:
+                print(f"  Error scanning folders: {e}")
 
     if args.report:
         print(f"\n{'LOCAL VS IDRIVE BACKUP REPORT':^95}")
@@ -406,3 +446,4 @@ if __name__ == "__main__":
 # usage: 
 # to scan all drives: python3 scan-local-drives.py --scan
 # to tag a specific folder: python3 scan-local-drives.py --tag "/Volumes/Backup/Photos=Needs Backup"
+# python3 scan-local-drives.py --scan --path "/Volumes/asd/projects"  (to scan just a specific folder)
