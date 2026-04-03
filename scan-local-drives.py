@@ -22,6 +22,23 @@ MIN_SIZE_GB = 1.0  # Only track folders larger than 1GB by default
 # Helpers
 # -------------------------
 
+class Logger(object):
+    """Helper to write to both console and file."""
+    def __init__(self, filename):
+        self.terminal = sys.stdout
+        self.log = open(filename, "w", encoding="utf-8")
+
+    def write(self, message):
+        self.terminal.write(message)
+        # Filter out progress indicators (\r) and ANSI escape sequences to keep the file clean
+        if not (message.startswith('\r') or '\033[' in message):
+            self.log.write(message)
+            self.log.flush()
+
+    def flush(self):
+        self.terminal.flush()
+
+
 def get_disk_usage_from_info(info):
     """
     Use diskutil values if available, but always fallback to shutil.disk_usage for mounted volumes.
@@ -66,14 +83,33 @@ def detect_device_type(info):
         return "external_drive"
     return "unknown"
 
+def get_mount_point_for_path(path):
+    """
+    Given a path, find its mount point.
+    """
+    abs_path = os.path.abspath(path)
+    # Check if the path itself is a mount point
+    if os.path.ismount(abs_path):
+        return abs_path
+    
+    # Traverse up the directory tree to find the mount point
+    current_path = abs_path
+    while True:
+        parent_path = os.path.dirname(current_path)
+        if parent_path == current_path: # Reached root and not a mount point
+            return None
+        if os.path.ismount(current_path):
+            return current_path
+        current_path = parent_path
+
 def scan_folder(path, min_size_gb=1.0, depth=None):
     """
     Calculate the size of the folder and all sub-folders at the given path.
     If depth is None (default), it scans recursively for an accurate audit.
-    Returns (total_bytes, found_folders_dict, free_bytes).
-    found_folders_dict maps path -> recursive_size_bytes for significant folders.
+    Returns (total_bytes, found_folders_dict, None).
+    found_folders_dict maps path -> {"size": bytes, "mtime": float}
     """
-    folder_accum = {} # path -> size
+    folder_accum = {} # path -> {"size": size, "mtime": mtime}
     try:
         for dirpath, dirnames, filenames in os.walk(path):
             # Feedback: Show the current directory being processed (truncated for terminal width)
@@ -87,6 +123,7 @@ def scan_folder(path, min_size_gb=1.0, depth=None):
                     # Don't descend further
                     dirnames[:] = []
 
+            this_dir_mtime = os.path.getmtime(dirpath)
             this_dir_files = 0
             for f in filenames:
                 fp = os.path.join(dirpath, f)
@@ -99,7 +136,12 @@ def scan_folder(path, min_size_gb=1.0, depth=None):
             # Propagate this directory's file sizes up to the scan root
             curr = dirpath
             while True:
-                folder_accum[curr] = folder_accum.get(curr, 0) + this_dir_files
+                if curr not in folder_accum:
+                    folder_accum[curr] = {"size": 0, "mtime": 0}
+                
+                folder_accum[curr]["size"] += this_dir_files
+                folder_accum[curr]["mtime"] = this_dir_mtime if curr == dirpath else folder_accum[curr]["mtime"]
+                
                 if curr == path:
                     break
                 parent = os.path.dirname(curr)
@@ -117,9 +159,10 @@ def scan_folder(path, min_size_gb=1.0, depth=None):
 
     min_bytes = min_size_gb * (1024**3)
     # Filter results: only return folders large enough to track in the DB
-    significant = {p: s for p, s in folder_accum.items() if s >= min_bytes}
-
-    return folder_accum.get(path, 0), significant, None
+    significant = {p: data for p, data in folder_accum.items() if data["size"] >= min_bytes}
+    
+    total_root_size = folder_accum.get(path, {}).get("size", 0)
+    return total_root_size, significant, None
 
 # -------------------------
 # Database setup
@@ -127,6 +170,7 @@ def scan_folder(path, min_size_gb=1.0, depth=None):
 
 def init_db():
     conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row # Enable accessing columns by name
     conn.execute("""
     CREATE TABLE IF NOT EXISTS devices (
         device_id INTEGER PRIMARY KEY,
@@ -172,6 +216,7 @@ def init_db():
                     device_id INTEGER,
                     path TEXT,
                     size_bytes INTEGER,
+                    last_modified REAL,
                     last_scanned DATETIME,
                     needs_backup BOOLEAN DEFAULT 1,
                     needs_tag BOOLEAN DEFAULT 0,
@@ -179,23 +224,14 @@ def init_db():
                     UNIQUE(device_id, path)
                 )
             """)
+            # Note: Migration from old schema without last_modified column
             conn.execute("""
                 INSERT INTO folders_new (folder_id, device_id, path, size_bytes, last_scanned, needs_backup, needs_tag, notes)
-                SELECT
-                    folder_id,
-                    device_id,
-                    path,
-                    size_bytes,
-                    last_scanned,
-                    needs_backup,
-                    needs_tag,
-                    notes
+                SELECT folder_id, device_id, path, size_bytes, last_scanned, needs_backup, needs_tag, notes
                 FROM (
-                    SELECT *,
-                           ROW_NUMBER() OVER (PARTITION BY device_id, path ORDER BY last_scanned DESC, folder_id DESC) as rn
+                    SELECT *, ROW_NUMBER() OVER (PARTITION BY device_id, path ORDER BY last_scanned DESC) as rn
                     FROM folders
-                ) AS ranked_folders
-                WHERE rn = 1;
+                ) WHERE rn = 1
             """)
             conn.execute("DROP TABLE folders")
             conn.execute("ALTER TABLE folders_new RENAME TO folders")
@@ -208,6 +244,7 @@ def init_db():
                 device_id INTEGER,
                 path TEXT,
                 size_bytes INTEGER,
+                last_modified REAL,
                 last_scanned DATETIME,
                 needs_backup BOOLEAN DEFAULT 1,
                 needs_tag BOOLEAN DEFAULT 0,
@@ -260,9 +297,14 @@ def main():
     parser.add_argument("--report", action="store_true", help="Show local folders and their IDrive backup status")
     parser.add_argument("--path", help="Scan only a specific path")
     parser.add_argument("--tag", help="Tag a folder: --tag '/Users/name/Photos=Memories'")
+    parser.add_argument("--output", help="Save the output to a specific file (e.g., report.txt)")
     parser.add_argument("--min-size", type=float, default=MIN_SIZE_GB, help="Minimum size in GB to record (default 1.0)")
     
     args = parser.parse_args()
+
+    if args.output:
+        sys.stdout = Logger(args.output)
+
     conn = init_db()
     hostname = socket.gethostname()
 
@@ -286,12 +328,18 @@ def main():
         target_disk_ids = []
         if args.path:
             try:
-                # Resolve the device identifier for the specific path provided
-                info_proc = subprocess.run(["diskutil", "info", "-plist", args.path], capture_output=True, check=True)
+                # First, determine the mount point for the given path
+                actual_mount_point = get_mount_point_for_path(args.path)
+                if not actual_mount_point:
+                    print(f"Error: Could not determine mount point for path {args.path}")
+                    return
+
+                # Resolve the device identifier for the mount point
+                info_proc = subprocess.run(["diskutil", "info", "-plist", actual_mount_point], capture_output=True, check=True)
                 info = plistlib.loads(info_proc.stdout)
                 target_disk_ids = [info.get("DeviceIdentifier")]
             except Exception as e:
-                print(f"Error: Could not resolve device for path {args.path}: {e}")
+                print(f"Error: Could not resolve device for mount point {actual_mount_point} (derived from {args.path}): {e}")
                 return
         else:
             disks = subprocess.run(["diskutil", "list", "-plist"], capture_output=True, check=True)
@@ -377,12 +425,13 @@ def main():
             
             # Always add the mount point itself as a tracked entry to check if the whole drive is backed up
             conn.execute("""
-                INSERT INTO folders (device_id, path, size_bytes, last_scanned)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO folders (device_id, path, size_bytes, last_modified, last_scanned)
+                VALUES (?, ?, ?, ?, ?)
                 ON CONFLICT(device_id, path) DO UPDATE SET 
                     size_bytes=excluded.size_bytes, 
+                    last_modified=excluded.last_modified,
                     last_scanned=excluded.last_scanned
-            """, (device_id, mount_point, used, datetime.now(timezone.utc)))
+            """, (device_id, mount_point, used, os.path.getmtime(mount_point), datetime.now(timezone.utc)))
             conn.commit()
 
             try:
@@ -395,41 +444,55 @@ def main():
 
                 print(f"  Found {len(entries_to_scan)} top-level folders to audit on {name}.")
                 for i, path_to_scan in enumerate(entries_to_scan, 1):
-                    # Avoid scanning /Volumes when processing the root drive to prevent double-counting
-                    if mount_point == "/" and os.path.basename(path_to_scan) == "Volumes":
+                    # Avoid system/virtual directories on the root drive to prevent Firmlink recursion (double-counting)
+                    # /System/Volumes/Data/Volumes is a common path for duplicates.
+                    if mount_point == "/" and os.path.basename(path_to_scan) in ("Volumes", "System", "dev", "Network"):
                         continue
                         
+                    # Check if folder was modified since last scan
+                    current_mtime = os.path.getmtime(path_to_scan)
+                    cursor_m = conn.execute("SELECT size_bytes, last_modified FROM folders WHERE device_id=? AND path=?", (device_id, path_to_scan))
+                    existing_f = cursor_m.fetchone()
+                    
+                    if existing_f and existing_f[1] == current_mtime:
+                        print(f"    [{i}/{len(entries_to_scan)}] Skipping: {path_to_scan} (Unchanged: {existing_f[0]/(1024**3):.2f} GB)")
+                        continue
+
                     print(f"    [{i}/{len(entries_to_scan)}] Processing: {path_to_scan}", end="", flush=True)
                     size_bytes, found_folders, _ = scan_folder(path_to_scan, min_size_gb=args.min_size)
                     size_gb = size_bytes / (1024**3) if size_bytes else 0
                     print(f" -> {path_to_scan}: {size_gb:.2f} GB")
 
                     if found_folders:
-                        for f_path, f_size in found_folders.items():
+                        for f_path, f_data in found_folders.items():
                             conn.execute("""
-                                INSERT INTO folders (device_id, path, size_bytes, last_scanned)
-                                VALUES (?, ?, ?, ?)
+                                INSERT INTO folders (device_id, path, size_bytes, last_modified, last_scanned)
+                                VALUES (?, ?, ?, ?, ?)
                                 ON CONFLICT(device_id, path) DO UPDATE SET 
                                     size_bytes=excluded.size_bytes, 
+                                    last_modified=excluded.last_modified,
                                     last_scanned=excluded.last_scanned
-                            """, (device_id, f_path, f_size, datetime.now(timezone.utc)))
+                            """, (device_id, f_path, f_data["size"], f_data["mtime"], datetime.now(timezone.utc)))
                         conn.commit()
             except Exception as e:
                 print(f"  Error scanning folders: {e}")
 
     if args.report:
         print(f"\n{'LOCAL VS IDRIVE BACKUP REPORT':^95}")
-        print(f"{'Local Path':<45} | {'Size (GB)':>10} | {'IDrive Status':<25} | {'Notes'}")
-        print("-" * 110)
+        print(f"{'Local Path':<40} | {'Size (GB)':>10} | {'Modified':<20} | {'IDrive Status':<20} | {'Notes'}")
+        print("-" * 125)
         
-        cursor = conn.execute("SELECT f.path, f.size_bytes, f.notes FROM folders f ORDER BY f.size_bytes DESC")
+        cursor = conn.execute("SELECT f.path, f.size_bytes, f.last_modified, f.notes FROM folders f ORDER BY f.size_bytes DESC")
         for row in cursor:
             path = row['path']
             size_gb = row['size_bytes'] / (1024**3)
+            mtime = row['last_modified']
+            mtime_str = datetime.fromtimestamp(mtime).strftime('%Y-%m-%d %H:%M') if mtime else "Unknown"
             idrive_data = get_idrive_backup_info(path)
             
-            status = f"Backed Up ({idrive_data['size']/(1024**3):.1f}GB)" if idrive_data else "MISSING"
-            print(f"{path[:45]:<45} | {size_gb:>10.2f} | {status:<25} | {row['notes'] or ''}")
+            idrive_size = (idrive_data['size'] or 0) if idrive_data else 0
+            status = f"Backed Up ({idrive_size/(1024**3):.1f}GB)" if idrive_data else "MISSING"
+            print(f"{path[:40]:<40} | {size_gb:>10.2f} | {mtime_str:<20} | {status:<20} | {row['notes'] or ''}")
 
     if not any([args.scan, args.report, args.tag]):
         parser.print_help()
@@ -447,3 +510,5 @@ if __name__ == "__main__":
 # to scan all drives: python3 scan-local-drives.py --scan
 # to tag a specific folder: python3 scan-local-drives.py --tag "/Volumes/Backup/Photos=Needs Backup"
 # python3 scan-local-drives.py --scan --path "/Volumes/asd/projects"  (to scan just a specific folder)
+# python3 scan-local-drives.py --report --output local_audit_report.txt (run report and save to file)
+
