@@ -207,6 +207,11 @@ def init_db():
             conn.execute("ALTER TABLE folders ADD COLUMN last_modified REAL")
             conn.commit()
 
+        if "tag" not in columns:
+            print("Adding tag column to folders table...")
+            conn.execute("ALTER TABLE folders ADD COLUMN tag TEXT")
+            conn.commit()
+
         # Check for UNIQUE constraint on device_id and path
         cursor3 = conn.execute("PRAGMA index_list(folders)")
         indexes = cursor3.fetchall()
@@ -225,14 +230,15 @@ def init_db():
                     last_modified REAL,
                     last_scanned DATETIME,
                     needs_backup BOOLEAN DEFAULT 1,
-                    needs_tag BOOLEAN DEFAULT 0,
+                    needs_tag BOOLEAN DEFAULT 0, -- Legacy flag
+                    tag TEXT,
                     notes TEXT,
                     UNIQUE(device_id, path)
                 )
             """)
             conn.execute("""
-                INSERT INTO folders_new (folder_id, device_id, path, size_bytes, last_modified, last_scanned, needs_backup, needs_tag, notes)
-                SELECT folder_id, device_id, path, size_bytes, last_modified, last_scanned, needs_backup, needs_tag, notes
+                INSERT INTO folders_new (folder_id, device_id, path, size_bytes, last_modified, last_scanned, needs_backup, needs_tag, tag, notes)
+                SELECT folder_id, device_id, path, size_bytes, last_modified, last_scanned, needs_backup, needs_tag, tag, notes
                 FROM (
                     SELECT *, ROW_NUMBER() OVER (PARTITION BY device_id, path ORDER BY last_scanned DESC) as rn
                     FROM folders
@@ -253,6 +259,7 @@ def init_db():
                 last_scanned DATETIME,
                 needs_backup BOOLEAN DEFAULT 1,
                 needs_tag BOOLEAN DEFAULT 0,
+                tag TEXT,
                 notes TEXT,
                 UNIQUE(device_id, path)
             )
@@ -267,9 +274,9 @@ def init_db():
 
 def tag_folder(conn, device_id, path, tag_name, needs_backup=1):
     conn.execute("""
-        INSERT INTO folders (device_id, path, needs_tag, needs_backup, last_scanned, size_bytes, last_modified)
+        INSERT INTO folders (device_id, path, tag, needs_backup, last_scanned, size_bytes, last_modified)
         VALUES (?, ?, ?, ?, ?, 0, 0)
-        ON CONFLICT(device_id, path) DO UPDATE SET needs_tag=excluded.needs_tag, needs_backup=excluded.needs_backup
+        ON CONFLICT(device_id, path) DO UPDATE SET tag=excluded.tag, needs_backup=excluded.needs_backup
     """, (device_id, path, tag_name, needs_backup, datetime.now(timezone.utc)))
     conn.commit()
 
@@ -317,7 +324,7 @@ def main():
         if "=" in args.tag:
             t_path, t_val = args.tag.split("=", 1)
             print(f"Tagging {t_path} as {t_val}...")
-            conn.execute("UPDATE folders SET notes = ? WHERE path = ?", (t_val, t_path))
+            conn.execute("UPDATE folders SET tag = ? WHERE path = ?", (t_val, t_path))
             conn.commit()
             return
 
@@ -484,20 +491,21 @@ def main():
 
     if args.report:
         print(f"\n{'LOCAL VS IDRIVE BACKUP REPORT':^95}")
-        print(f"{'Local Path':<40} | {'Size (GB)':>10} | {'Modified':<20} | {'IDrive Status':<20} | {'Notes'}")
-        print("-" * 125)
+        print(f"{'Local Path':<40} | {'Size (GB)':>10} | {'Modified':<20} | {'IDrive Status':<20} | {'Tag'}")
+        print("-" * 135)
         
-        cursor = conn.execute("SELECT f.path, f.size_bytes, f.last_modified, f.notes FROM folders f ORDER BY f.size_bytes DESC")
+        cursor = conn.execute("SELECT f.path, f.size_bytes, f.last_modified, f.tag, f.notes FROM folders f ORDER BY f.size_bytes DESC")
         for row in cursor:
             path = row['path']
             size_gb = row['size_bytes'] / (1024**3)
             mtime = row['last_modified']
             mtime_str = datetime.fromtimestamp(mtime).strftime('%Y-%m-%d %H:%M') if mtime else "Unknown"
+            tag = row['tag'] or ""
             idrive_data = get_idrive_backup_info(path)
             
             idrive_size = (idrive_data['size'] or 0) if idrive_data else 0
             status = f"Backed Up ({idrive_size/(1024**3):.1f}GB)" if idrive_data else "MISSING"
-            print(f"{path[:40]:<40} | {size_gb:>10.2f} | {mtime_str:<20} | {status:<20} | {row['notes'] or ''}")
+            print(f"{path[:40]:<40} | {size_gb:>10.2f} | {mtime_str:<20} | {status:<20} | {tag}")
 
     if not any([args.scan, args.report, args.tag]):
         parser.print_help()
@@ -512,7 +520,10 @@ if __name__ == "__main__":
 
 
 # usage: 
+# =====
+
 # to scan all drives: python3 scan-local-drives.py --scan
 # to tag a specific folder: python3 scan-local-drives.py --tag "/Volumes/Backup/Photos=Needs Backup"
 # python3 scan-local-drives.py --scan --path "/Volumes/asd/projects"  (to scan just a specific folder)
 # python3 scan-local-drives.py --report --output local_audit_report.txt (run report and save to file)
+# python3 scan-local-drives.py --tag "/Volumes/Extreme Pro/Photos Library/All-Media.photoslibrary=CentralPhotosLibrary"
