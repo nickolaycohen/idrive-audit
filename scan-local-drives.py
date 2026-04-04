@@ -87,20 +87,18 @@ def get_mount_point_for_path(path):
     """
     Given a path, find its mount point.
     """
-    abs_path = os.path.abspath(path)
-    # Check if the path itself is a mount point
-    if os.path.ismount(abs_path):
-        return abs_path
-    
-    # Traverse up the directory tree to find the mount point
-    current_path = abs_path
-    while True:
-        parent_path = os.path.dirname(current_path)
-        if parent_path == current_path: # Reached root and not a mount point
-            return None
-        if os.path.ismount(current_path):
-            return current_path
-        current_path = parent_path
+    abs_path = os.path.abspath(os.path.expanduser(path))
+    if not os.path.exists(abs_path):
+        return None
+
+    curr = abs_path
+    while not os.path.ismount(curr):
+        parent = os.path.dirname(curr)
+        if parent == curr:
+            # Reached the ultimate root (e.g. '/')
+            break
+        curr = parent
+    return curr
 
 def scan_folder(path, min_size_gb=1.0, depth=None):
     """
@@ -111,7 +109,10 @@ def scan_folder(path, min_size_gb=1.0, depth=None):
     """
     folder_accum = {} # path -> {"size": size, "mtime": mtime}
     try:
-        for dirpath, dirnames, filenames in os.walk(path):
+        def on_error(err):
+            sys.stdout.write(f"\n      [WARN] Permission Denied: {err.filename}\n")
+
+        for dirpath, dirnames, filenames in os.walk(path, onerror=on_error):
             # Feedback: Show the current directory being processed (truncated for terminal width)
             display_path = dirpath if len(dirpath) < 65 else f"...{dirpath[-62:]}"
             sys.stdout.write(f"\r      > Auditing: {display_path:<65}")
@@ -475,17 +476,23 @@ def main():
                     size_gb = size_bytes / (1024**3) if size_bytes else 0
                     print(f" -> {path_to_scan}: {size_gb:.2f} GB")
 
-                    if found_folders:
-                        for f_path, f_data in found_folders.items():
-                            conn.execute("""
-                                INSERT INTO folders (device_id, path, size_bytes, last_modified, last_scanned)
-                                VALUES (?, ?, ?, ?, ?)
-                                ON CONFLICT(device_id, path) DO UPDATE SET 
-                                    size_bytes=excluded.size_bytes, 
-                                    last_modified=excluded.last_modified,
-                                    last_scanned=excluded.last_scanned
-                            """, (device_id, f_path, f_data["size"], f_data["mtime"], datetime.now(timezone.utc)))
-                        conn.commit()
+                    # Ensure the target folder itself is always recorded, even if small or empty
+                    if path_to_scan not in found_folders:
+                        found_folders[path_to_scan] = {
+                            "size": size_bytes,
+                            "mtime": os.path.getmtime(path_to_scan)
+                        }
+
+                    for f_path, f_data in found_folders.items():
+                        conn.execute("""
+                            INSERT INTO folders (device_id, path, size_bytes, last_modified, last_scanned)
+                            VALUES (?, ?, ?, ?, ?)
+                            ON CONFLICT(device_id, path) DO UPDATE SET 
+                                size_bytes=excluded.size_bytes, 
+                                last_modified=excluded.last_modified,
+                                last_scanned=excluded.last_scanned
+                        """, (device_id, f_path, f_data["size"], f_data["mtime"], datetime.now(timezone.utc)))
+                    conn.commit()
             except Exception as e:
                 print(f"  Error scanning folders: {e}")
 
