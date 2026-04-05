@@ -292,11 +292,13 @@ class Logger(object):
 
     def write(self, message):
         self.terminal.write(message)
-        self.log.write(message)
-        self.log.flush() # Ensure it saves even if the script crashes
+        # Filter out progress indicators (\r) and ANSI escape sequences to keep the file clean
+        if not (message.startswith('\r') or '\033[' in message):
+            self.log.write(message)
+            self.log.flush()
 
     def flush(self):
-        pass
+        self.terminal.flush()
 
 sys.stdout = Logger()
 

@@ -15,6 +15,7 @@ import sys
 
 DB_PATH = "device_registry.db"
 IDRIVE_DB_PATH = "idrive_audit.db"
+OUTPUT_FILE = "local_audit_report.txt"
 
 MIN_SIZE_GB = 1.0  # Only track folders larger than 1GB by default
 
@@ -24,9 +25,9 @@ MIN_SIZE_GB = 1.0  # Only track folders larger than 1GB by default
 
 class Logger(object):
     """Helper to write to both console and file."""
-    def __init__(self, filename):
+    def __init__(self):
         self.terminal = sys.stdout
-        self.log = open(filename, "w", encoding="utf-8")
+        self.log = open(OUTPUT_FILE, "w", encoding="utf-8")
 
     def write(self, message):
         self.terminal.write(message)
@@ -37,6 +38,8 @@ class Logger(object):
 
     def flush(self):
         self.terminal.flush()
+
+sys.stdout = Logger()
 
 
 def get_disk_usage_from_info(info):
@@ -310,13 +313,9 @@ def main():
     parser.add_argument("--report", action="store_true", help="Show local folders and their IDrive backup status")
     parser.add_argument("--path", help="Scan only a specific path")
     parser.add_argument("--tag", help="Tag a folder: --tag '/Users/name/Photos=Memories'")
-    parser.add_argument("--output", help="Save the output to a specific file (e.g., report.txt)")
     parser.add_argument("--min-size", type=float, default=MIN_SIZE_GB, help="Minimum size in GB to record (default 1.0)")
     
     args = parser.parse_args()
-
-    if args.output:
-        sys.stdout = Logger(args.output)
 
     conn = init_db()
     hostname = socket.gethostname()
