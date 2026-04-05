@@ -41,6 +41,11 @@ class Logger(object):
 
 sys.stdout = Logger()
 
+def format_display_path(path):
+    """Trims /Volumes/ and replaces with // for cleaner output."""
+    if path.startswith("/Volumes/"):
+        return "//" + path[len("/Volumes/"):]
+    return path
 
 def get_disk_usage_from_info(info):
     """
@@ -121,8 +126,9 @@ def scan_folder(path, min_size_gb=1.0, depth=None):
 
         for dirpath, dirnames, filenames in os.walk(path, onerror=on_error):
             # Feedback: Show the current directory being processed (truncated for terminal width)
-            display_path = dirpath if len(dirpath) < 65 else f"...{dirpath[-62:]}"
-            sys.stdout.write(f"\r      > Auditing: {display_path:<65}")
+            f_path = format_display_path(dirpath)
+            display_path = f_path if len(f_path) < 65 else f"...{f_path[-62:]}"
+            sys.stdout.write(f"\r      > Auditing: {display_path:<65}\033[K")
             sys.stdout.flush()
 
             if depth is not None:
@@ -641,19 +647,20 @@ def main():
                     if mount_point == "/" and os.path.basename(path_to_scan) in ("Volumes", "System", "dev", "Network"):
                         continue
                         
+                    disp_path = format_display_path(path_to_scan)
                     # Check if folder was modified since last scan
                     current_mtime = os.path.getmtime(path_to_scan)
                     cursor_m = conn.execute("SELECT size_bytes, last_modified FROM folders WHERE device_id=? AND path=?", (device_id, path_to_scan))
                     existing_f = cursor_m.fetchone()
                     
                     if existing_f and existing_f[1] == current_mtime:
-                        print(f"    [{i}/{len(entries_to_scan)}] Skipping: {path_to_scan} (Unchanged: {existing_f[0]/(1024**3):.2f} GB)")
+                        print(f"    [{i}/{len(entries_to_scan)}] Skipping: {disp_path} (Unchanged: {existing_f[0]/(1024**3):.2f} GB)")
                         continue
 
-                    print(f"    [{i}/{len(entries_to_scan)}] Processing: {path_to_scan}", end="", flush=True)
+                    print(f"    [{i}/{len(entries_to_scan)}] Processing: {disp_path}", end="", flush=True)
                     size_bytes, found_folders, _ = scan_folder(path_to_scan, min_size_gb=args.min_size)
                     size_gb = size_bytes / (1024**3) if size_bytes else 0
-                    print(f" -> {path_to_scan}: {size_gb:.2f} GB")
+                    print(f" -> {disp_path}: {size_gb:.2f} GB")
 
                     # Ensure the target folder itself is always recorded, even if small or empty
                     if path_to_scan not in found_folders:
@@ -679,9 +686,9 @@ def main():
                 print(f"  Error scanning folders: {e}")
 
     if args.report:
-        print(f"\n{'LOCAL VS IDRIVE BACKUP REPORT':^95}")
-        print(f"{'Local Path':<40} | {'Size (GB)':>10} | {'Modified':<18} | {'Class (Priority/Policy)':<25} | {'IDrive Status'}")
-        print("-" * 145)
+        print(f"\n{'LOCAL VS IDRIVE BACKUP REPORT':^190}")
+        print(f"{'Local Path':<60} | {'Size (GB)':>10} | {'Modified':<18} | {'Class (Priority/Policy)':<50} | {'IDrive Status'}")
+        print("-" * 190)
         
         cursor = conn.execute("""
             SELECT f.path, f.size_bytes, f.last_modified, f.tag, c.class_name, pr.priority_name, p.policy_name, f.notes 
@@ -692,7 +699,8 @@ def main():
             ORDER BY f.size_bytes DESC
         """)
         for row in cursor:
-            path = row['path']
+            raw_path = row['path']
+            path = format_display_path(raw_path)
             size_gb = row['size_bytes'] / (1024**3)
             mtime = row['last_modified']
             mtime_str = datetime.fromtimestamp(mtime).strftime('%Y-%m-%d %H:%M') if mtime else "Unknown"
@@ -703,12 +711,12 @@ def main():
             if policy in ("IgnoreBackup", "SingleCopyNoBackup"):
                 status = "IGNORED"
             else:
-                idrive_data = get_idrive_backup_info(path)
+                idrive_data = get_idrive_backup_info(raw_path)
                 idrive_size = (idrive_data['size'] or 0) if idrive_data else 0
                 status = f"Backed Up ({idrive_size/(1024**3):.1f}GB)" if idrive_data else "MISSING"
                 
             class_info = f"{folder_class} ({priority}/{policy})"
-            print(f"{path[:40]:<40} | {size_gb:>10.2f} | {mtime_str:<18} | {class_info:<25} | {status}")
+            print(f"{path[:60]:<60} | {size_gb:>10.2f} | {mtime_str:<18} | {class_info:<50} | {status}")
 
     if not any([args.scan, args.report, args.tag, args.define_class, args.assign_class, args.update_class]):
         parser.print_help()
