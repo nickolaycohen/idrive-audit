@@ -322,9 +322,10 @@ def init_db():
                     break
 
         has_class_id = "class_id" in columns
+        has_needs_backup = "needs_backup" in columns
 
-        # If UNIQUE constraint or class_id missing, migrate table
-        if not has_unique or not has_class_id:
+        # If UNIQUE constraint, class_id missing, or legacy needs_backup exists, migrate table
+        if not has_unique or not has_class_id or has_needs_backup:
             print("Migrating folders table to align with latest schema...")
             conn.execute("BEGIN TRANSACTION")
             conn.execute("""
@@ -335,7 +336,6 @@ def init_db():
                     size_bytes INTEGER,
                     last_modified REAL,
                     last_scanned DATETIME,
-                    needs_backup BOOLEAN DEFAULT 1,
                     needs_tag BOOLEAN DEFAULT 0, -- Legacy flag
                     tag TEXT,
                     drilled BOOLEAN DEFAULT 0,
@@ -353,8 +353,8 @@ def init_db():
                 class_map_expr = "1"
 
             conn.execute("""
-                INSERT INTO folders_new (folder_id, device_id, path, size_bytes, last_modified, last_scanned, needs_backup, needs_tag, tag, drilled, class_id, notes)
-                SELECT folder_id, device_id, path, size_bytes, last_modified, last_scanned, needs_backup, needs_tag, tag, drilled, """ + class_map_expr + """, notes
+                INSERT INTO folders_new (folder_id, device_id, path, size_bytes, last_modified, last_scanned, needs_tag, tag, drilled, class_id, notes)
+                SELECT folder_id, device_id, path, size_bytes, last_modified, last_scanned, needs_tag, tag, drilled, """ + class_map_expr + """, notes
                 FROM (
                     SELECT *, ROW_NUMBER() OVER (PARTITION BY device_id, path ORDER BY last_scanned DESC) as rn
                     FROM folders
@@ -373,7 +373,6 @@ def init_db():
                 size_bytes INTEGER,
                 last_modified REAL,
                 last_scanned DATETIME,
-                needs_backup BOOLEAN DEFAULT 1,
                 needs_tag BOOLEAN DEFAULT 0,
                 tag TEXT,
                 drilled BOOLEAN DEFAULT 0,
@@ -445,6 +444,7 @@ def main():
     parser.add_argument("--define-class", help="Define a folder class and priority: --define-class 'Media=1-PersonalData'")
     parser.add_argument("--assign-class", help="Assign a class to a folder: --assign-class '/path/to/dir=Media'")
     parser.add_argument("--update-class", help="Update an existing class by ID: --update-class '1=IDriveBackup=1-PersonalData'")
+    parser.add_argument("--set-drilled", help="Set the drilled flag for a folder and subfolders: --set-drilled '/path/to/dir=1'")
     parser.add_argument("--min-size", type=float, default=MIN_SIZE_GB, help="Minimum size in GB to record (default 1.0)")
     
     args = parser.parse_args()
@@ -492,6 +492,25 @@ def main():
             conn.execute("UPDATE folder_classes SET class_name = ?, priority_id = ? WHERE class_id = ?", (c_name, pr_id, c_id))
             conn.commit()
             print("Update complete.")
+            return
+
+    if args.set_drilled:
+        if "=" in args.set_drilled:
+            path, val = args.set_drilled.split("=", 1)
+            if path.startswith('~'): path = os.path.expanduser(path)
+            path = os.path.abspath(path).rstrip('/') or "/"
+            try:
+                drilled_val = int(val)
+                print(f"Setting drilled={drilled_val} for {path}...")
+                cursor = conn.execute("UPDATE folders SET drilled = ? WHERE path = ?", (drilled_val, path))
+                conn.commit()
+                count = cursor.rowcount
+                if count == 0:
+                    print(f"Warning: Path '{path}' not found in registry. You may need to scan it first.")
+                else:
+                    print(f"Updated {count} record(s) in the database.")
+            except ValueError:
+                print("Error: Drilled value must be an integer (0 or 1).")
             return
 
     if args.assign_class:
@@ -718,7 +737,7 @@ def main():
             class_info = f"{folder_class} ({priority}/{policy})"
             print(f"{path[:60]:<60} | {size_gb:>10.2f} | {mtime_str:<18} | {class_info:<50} | {status}")
 
-    if not any([args.scan, args.report, args.tag, args.define_class, args.assign_class, args.update_class]):
+    if not any([args.scan, args.report, args.tag, args.define_class, args.assign_class, args.update_class, args.set_drilled]):
         parser.print_help()
 
     conn.commit()
