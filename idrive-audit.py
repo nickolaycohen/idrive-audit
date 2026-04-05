@@ -29,12 +29,32 @@ from urllib3.util.retry import Retry
 # python3 idrive-audit.py --start-folder /Users/nickolaycohen/Pictures  --device-filter D01692572940000295373 --max-depth 1
 # python3 idrive-audit.py --tag /Volumes/Extreme\ Pro/Photos\ Library/All-Media.photoslibrary  --device-filter D01692572940000295373 
 # python3 idrive-audit.py --device-filter D01692572940000295373 --tag "/Volumes/Extreme\ Pro/Photos\ Library/All-Media.photoslibrary=PhotosLibrary-All-Media"
-
- 
+# python3 idrive-audit.py --device-filter D01692572940000295373 --tag "/Volumes/Extreme\ Pro/Photos\ Library/Samuil.photoslibrary=PhotosLibrary-Samuil"
+# 3/13
+# python3 idrive-audit.py --start-folder /C/iDrive-Backup-Restore-ASUS-2  --device-filter D01567900303000721746 --max-depth 1
+# python3 idrive-audit.py --start-folder /Users/nickolaycohen/Pictures/Apple\ Photo\ Exports --device-filter D01740009573000135005 --max-depth 1
+# python3 idrive-audit.py --start-folder /C/iDrive-Backup-Restore-ASUS-2/Niki\ and\ Benny\ Pictures  --device-filter D01567900303000721746 --max-depth 1
+# python3 idrive-audit.py --start-folder /Users/nickolaycohen/Pictures/Apple\ Photo\ Exports/Benny\ iPhone\ 16\ Pro  --device-filter D01740009573000135005 --max-depth 1
+# python3 idrive-audit.py --start-folder /C/Niki  --device-filter D01567232251000246054 --max-depth 1
+# If we remove folder from iDrive - need to rerun the underlying folders:
+# Ex.
+# python3 idrive-audit.py --start-folder /C/iDrive-Backup-Restore-ASUS/C  --device-filter D01567900303000721746 --max-depth 1
+# python3 idrive-audit.py --start-folder /Users  --device-filter D01563744743000489825 --max-depth 1
+# python3 idrive-audit.py --start-folder /Users/nickolaycohen  --device-filter D01563744743000489825 --max-depth 1
+# python3 idrive-audit.py --start-folder /Users/nickolaycohen/Pictures  --device-filter D01563744743000489825 --max-depth 1
+# python3 idrive-audit.py --start-folder /Users/nickolaycohen/Pictures/Pipeline  --device-filter D01563744743000489825 --max-depth 1
+# python3 idrive-audit.py --start-folder /Videos --device-filter R01563807439000950037 --max-depth 1
+# python3 idrive-audit.py --device-filter R01563807439000950037 --tag "/Videos/Recently\ Added=RawAssets-Nickolay-iPhone5-iPhone13ProMax-Videos"
+# python3 idrive-audit.py --start-folder /Videos --device-filter R01607197738000636951 --max-depth 1
+# python3 idrive-audit.py --device-filter R01607197738000636951 --tag "/Videos/Recently\ Added=RawAssets-Benny-iPhone3-2017-2026-Videos"
+# python3 idrive-audit.py --device-filter R01563807439000950037 --tag "/Videos/Recently\ Added=RawAssets-Nickolay-iPhone5-2017-2025-Videos"
 
 
 # --- AUTH ---
-COOKIE_STR = "EVSID=JYR67VFA3VUQVD2CZ3HHMK4P3ZB9Z3JQ0U1RRFL00OCR34KJP85QNOXHD35X; JSESSIONID=8B61886C82C347041DD766F56EE1BD0B.tomcat8;"
+# log into idrive website; go to Developer Tools → Application → Cookies and copy the EVSID and JSESSIONID values into the COOKIE_STR below (format: "EVSID=...; JSESSIONID=...;")
+# API call is made to browseFolder endpoint - look in Headers tab -> Request Headers → Cookie to find the correct string to use here.  This is a manual step since the cookie is periodically refreshed by the server and we want to avoid hardcoding credentials in the script.
+
+COOKIE_STR = "EVSID=QF40648Y4E20GY7UCNB8FK17YPZJAJAFZ7P727OHSK3JGK0GFXRXHE58OT0I; JSESSIONID=8B61886C82C347041DD766F56EE1BD0B.tomcat8;"
 BASE_URL = "https://evsweb2652.idrive.com/evs"
 
 HEADERS = {
@@ -260,6 +280,10 @@ def log_api_call(device_id, device_name, endpoint, path, details):
 
 
 # --- FULL DEVICE LIST ---
+# RAW_DEVICES = [
+#     {"device_id": "D01563744743000489825", "nick_name": "NickolaysiMac"},
+# ]
+
 RAW_DEVICES = [
     {"device_id": "D01563711761000105006", "nick_name": "NickolaysMacBookPro"},
     {"device_id": "D01563744743000489825", "nick_name": "NickolaysiMac"},
@@ -275,6 +299,7 @@ RAW_DEVICES = [
     {"device_id": "R01733266910000709467", "nick_name": "Milena’s iPad"},
     {"device_id": "D01740009573000135005", "nick_name": "NickolaysMacBookPro2"}
 ]
+
 
 # validate cookie now that we know which test device to use
 validate_cookie()

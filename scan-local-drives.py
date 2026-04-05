@@ -90,7 +90,11 @@ def get_mount_point_for_path(path):
     """
     Given a path, find its mount point.
     """
-    abs_path = os.path.abspath(os.path.expanduser(path))
+    # Shell expands ~ at the start. Avoid expanding literal ~ inside volume paths (common for scratch folders).
+    if path.startswith('~'):
+        path = os.path.expanduser(path)
+    abs_path = os.path.abspath(path)
+
     if not os.path.exists(abs_path):
         return None
 
@@ -175,6 +179,82 @@ def scan_folder(path, min_size_gb=1.0, depth=None):
 def init_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row # Enable accessing columns by name
+
+    # --- backup_policies table creation ---
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS backup_policies (
+        policy_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        policy_name TEXT UNIQUE
+    )
+    """)
+    conn.execute("INSERT OR IGNORE INTO backup_policies (policy_id, policy_name) VALUES (1, 'IDriveBackup'), (2, 'IgnoreBackup'), (3, 'SingleCopyNoBackup')")
+    conn.commit()
+
+    # --- folder_priorities table creation ---
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS folder_priorities (
+        priority_id INTEGER PRIMARY KEY,
+        priority_name TEXT UNIQUE,
+        backup_policy_id INTEGER,
+        FOREIGN KEY(backup_policy_id) REFERENCES backup_policies(policy_id)
+    )
+    """)
+    # Prepopulate based on request
+    conn.execute("INSERT OR IGNORE INTO folder_priorities (priority_id, priority_name, backup_policy_id) VALUES (1, '1-PersonalData', 1)")
+    conn.execute("INSERT OR IGNORE INTO folder_priorities (priority_id, priority_name, backup_policy_id) VALUES (9, '9-TemporaryWork', 3)")
+    conn.commit()
+
+    # --- folder_classes table migration and creation ---
+    cursor_fc_check = conn.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='folder_classes'")
+    fc_row = cursor_fc_check.fetchone()
+    if fc_row:
+        sql = fc_row[0]
+        # Trigger migration if class_id is missing, strict CHECK exists, or if missing priority_id
+        if "class_id" not in sql or "priority_id" not in sql:
+            print("Migrating folder_classes table to priority-based schema...")
+            conn.execute("BEGIN TRANSACTION")
+            conn.execute("ALTER TABLE folder_classes RENAME TO folder_classes_old")
+            conn.execute("""
+                CREATE TABLE folder_classes (
+                    class_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    class_name TEXT UNIQUE,
+                    priority_id INTEGER DEFAULT 1,
+                    FOREIGN KEY(priority_id) REFERENCES folder_priorities(priority_id)
+                )
+            """)
+            # Re-insert data: Map old backup_policy_id to reasonable priorities
+            # Since we now use priorities, we'll map backup-heavy classes to priority 1
+            if "backup_policy_id" in sql:
+                conn.execute("""
+                    INSERT OR IGNORE INTO folder_classes (class_name, priority_id) 
+                    SELECT class_name, CASE WHEN backup_policy_id = 2 THEN 9 ELSE 1 END 
+                    FROM folder_classes_old
+                """)
+            else:
+                conn.execute("INSERT OR IGNORE INTO folder_classes (class_name, priority_id) SELECT class_name, 1 FROM folder_classes_old")
+            
+            conn.execute("DROP TABLE folder_classes_old")
+            conn.execute("COMMIT")
+
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS folder_classes (
+        class_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        class_name TEXT UNIQUE,
+        priority_id INTEGER DEFAULT 1,
+        FOREIGN KEY(priority_id) REFERENCES folder_priorities(priority_id)
+    )
+    """)
+    conn.commit()
+
+    # Ensure default classes exist and link to appropriate priorities
+    conn.execute("INSERT OR IGNORE INTO folder_classes (class_id, class_name, priority_id) VALUES (1, 'IDriveBackup', 1)")
+    conn.execute("INSERT OR IGNORE INTO folder_classes (class_id, class_name, priority_id) VALUES (2, 'IgnoreBackup', 9)")
+    # Rename existing legacy defaults to requested names if they are still named 'Default' or 'Ignore'
+    conn.execute("UPDATE folder_classes SET class_name = 'IDriveBackup' WHERE class_id = 1 AND class_name = 'Default'")
+    conn.execute("UPDATE folder_classes SET class_name = 'IgnoreBackup' WHERE class_id = 2 AND class_name = 'Ignore'")
+    conn.commit()
+
+    # --- devices table creation ---
     conn.execute("""
     CREATE TABLE IF NOT EXISTS devices (
         device_id INTEGER PRIMARY KEY,
@@ -185,6 +265,7 @@ def init_db():
         last_seen DATETIME
     )
     """)
+    conn.commit()
     conn.execute("""
     CREATE TABLE IF NOT EXISTS device_usage (
         usage_id INTEGER PRIMARY KEY,
@@ -195,6 +276,7 @@ def init_db():
         free_bytes INTEGER
     )
     """)
+    conn.commit()
 
     # Ensure folders table schema is correct
     cursor = conn.execute("PRAGMA table_info(folders)")
@@ -216,14 +298,28 @@ def init_db():
             conn.execute("ALTER TABLE folders ADD COLUMN tag TEXT")
             conn.commit()
 
+        if "drilled" not in columns:
+            print("Adding drilled column to folders table...")
+            conn.execute("ALTER TABLE folders ADD COLUMN drilled BOOLEAN DEFAULT 0")
+            conn.commit()
+
         # Check for UNIQUE constraint on device_id and path
         cursor3 = conn.execute("PRAGMA index_list(folders)")
         indexes = cursor3.fetchall()
-        has_unique = any('device_id' in idx[1] and 'path' in idx[1] and idx[2] == 1 for idx in indexes)
+        has_unique = False
+        for idx in indexes:
+            if idx['unique'] == 1:
+                cursor_idx = conn.execute(f"PRAGMA index_info('{idx['name']}')")
+                idx_cols = [row['name'] for row in cursor_idx.fetchall()]
+                if 'device_id' in idx_cols and 'path' in idx_cols:
+                    has_unique = True
+                    break
 
-        # If UNIQUE constraint missing, migrate table
-        if not has_unique:
-            print("Migrating folders table to add UNIQUE(device_id, path)...")
+        has_class_id = "class_id" in columns
+
+        # If UNIQUE constraint or class_id missing, migrate table
+        if not has_unique or not has_class_id:
+            print("Migrating folders table to align with latest schema...")
             conn.execute("BEGIN TRANSACTION")
             conn.execute("""
                 CREATE TABLE folders_new (
@@ -236,13 +332,23 @@ def init_db():
                     needs_backup BOOLEAN DEFAULT 1,
                     needs_tag BOOLEAN DEFAULT 0, -- Legacy flag
                     tag TEXT,
+                    drilled BOOLEAN DEFAULT 0,
+                    class_id INTEGER DEFAULT 1,
                     notes TEXT,
                     UNIQUE(device_id, path)
                 )
             """)
+            # Map old folder_class TEXT values to new class_id INTEGER if column exists
+            if "class_id" in columns:
+                class_map_expr = "class_id"
+            elif "folder_class" in columns:
+                class_map_expr = "COALESCE((SELECT class_id FROM folder_classes WHERE class_name = folder_class), 1)"
+            else:
+                class_map_expr = "1"
+
             conn.execute("""
-                INSERT INTO folders_new (folder_id, device_id, path, size_bytes, last_modified, last_scanned, needs_backup, needs_tag, tag, notes)
-                SELECT folder_id, device_id, path, size_bytes, last_modified, last_scanned, needs_backup, needs_tag, tag, notes
+                INSERT INTO folders_new (folder_id, device_id, path, size_bytes, last_modified, last_scanned, needs_backup, needs_tag, tag, drilled, class_id, notes)
+                SELECT folder_id, device_id, path, size_bytes, last_modified, last_scanned, needs_backup, needs_tag, tag, drilled, """ + class_map_expr + """, notes
                 FROM (
                     SELECT *, ROW_NUMBER() OVER (PARTITION BY device_id, path ORDER BY last_scanned DESC) as rn
                     FROM folders
@@ -264,6 +370,8 @@ def init_db():
                 needs_backup BOOLEAN DEFAULT 1,
                 needs_tag BOOLEAN DEFAULT 0,
                 tag TEXT,
+                drilled BOOLEAN DEFAULT 0,
+                class_id INTEGER DEFAULT 1,
                 notes TEXT,
                 UNIQUE(device_id, path)
             )
@@ -272,17 +380,31 @@ def init_db():
 
     return conn
 
+def get_device_id_for_path(conn, path):
+    """
+    Retrieves the device_id for a given path from the folders table.
+    Assumes the path is unique enough or returns the first found.
+    """
+    cursor = conn.execute("SELECT device_id FROM folders WHERE path = ? LIMIT 1", (path,))
+    row = cursor.fetchone()
+    return row['device_id'] if row else None
+
+def propagate_folder_attribute(conn, base_path, attribute_name, attribute_value):
+    """
+    Propagates a given attribute (tag or class_id) to a base_path and all its subfolders
+    across all devices (to handle Firmlink duplicates or re-mounted drives).
+    """
+    # Pattern to match all descendants in the directory tree (e.g., /path/to/dir/%)
+    search_pattern = base_path.rstrip('/') + '/%'
+
+    # Update the base_path itself and all its subfolders globally by path string
+    cursor = conn.execute(f"UPDATE folders SET {attribute_name} = ? WHERE path = ? OR path LIKE ?",
+                          (attribute_value, base_path, search_pattern))
+    return cursor.rowcount
+
 # -------------------------
 # Main scan logic
 # -------------------------
-
-def tag_folder(conn, device_id, path, tag_name, needs_backup=1):
-    conn.execute("""
-        INSERT INTO folders (device_id, path, tag, needs_backup, last_scanned, size_bytes, last_modified)
-        VALUES (?, ?, ?, ?, ?, 0, 0)
-        ON CONFLICT(device_id, path) DO UPDATE SET tag=excluded.tag, needs_backup=excluded.needs_backup
-    """, (device_id, path, tag_name, needs_backup, datetime.now(timezone.utc)))
-    conn.commit()
 
 def get_idrive_backup_info(path):
     """Check the idrive_audit.db to see if this path (or similar) is backed up."""
@@ -313,6 +435,10 @@ def main():
     parser.add_argument("--report", action="store_true", help="Show local folders and their IDrive backup status")
     parser.add_argument("--path", help="Scan only a specific path")
     parser.add_argument("--tag", help="Tag a folder: --tag '/Users/name/Photos=Memories'")
+    parser.add_argument("--output", help="Save the output to a specific file (e.g., report.txt)")
+    parser.add_argument("--define-class", help="Define a folder class and priority: --define-class 'Media=1-PersonalData'")
+    parser.add_argument("--assign-class", help="Assign a class to a folder: --assign-class '/path/to/dir=Media'")
+    parser.add_argument("--update-class", help="Update an existing class by ID: --update-class '1=IDriveBackup=1-PersonalData'")
     parser.add_argument("--min-size", type=float, default=MIN_SIZE_GB, help="Minimum size in GB to record (default 1.0)")
     
     args = parser.parse_args()
@@ -323,9 +449,63 @@ def main():
     if args.tag:
         if "=" in args.tag:
             t_path, t_val = args.tag.split("=", 1)
-            print(f"Tagging {t_path} as {t_val}...")
-            conn.execute("UPDATE folders SET tag = ? WHERE path = ?", (t_val, t_path))
+            if t_path.startswith('~'): t_path = os.path.expanduser(t_path)
+            t_path = os.path.abspath(t_path).rstrip('/') or "/"
+            
+            print(f"Tagging {t_path} and subfolders as '{t_val}'...")
+            count = propagate_folder_attribute(conn, t_path, 'tag', t_val)
             conn.commit()
+            if count == 0:
+                print(f"Warning: Path '{t_path}' not found in registry. You may need to scan it first.")
+            else:
+                print(f"Updated {count} folders in the database.")
+            return
+
+    if args.define_class:
+        if "=" in args.define_class:
+            name, pr_name = args.define_class.split("=", 1)
+            # Lookup Priority ID
+            pr_row = conn.execute("SELECT priority_id FROM folder_priorities WHERE priority_name = ?", (pr_name,)).fetchone()
+            pr_id = pr_row['priority_id'] if pr_row else 1
+            
+            print(f"Defining class '{name}' linked to priority '{pr_name}' (ID: {pr_id})...")
+            conn.execute("INSERT OR REPLACE INTO folder_classes (class_name, priority_id) VALUES (?, ?)", (name, pr_id))
+            conn.commit()
+            return
+
+    if args.update_class:
+        # Format: ID=NAME=PRIORITY
+        parts = args.update_class.split("=")
+        if len(parts) == 3:
+            c_id, c_name, pr_name = parts
+            # Lookup Priority ID
+            pr_row = conn.execute("SELECT priority_id FROM folder_priorities WHERE priority_name = ?", (pr_name,)).fetchone()
+            pr_id = pr_row['priority_id'] if pr_row else 1
+            
+            print(f"Updating folder class ID {c_id} to '{c_name}' with priority '{pr_name}'...")
+            conn.execute("UPDATE folder_classes SET class_name = ?, priority_id = ? WHERE class_id = ?", (c_name, pr_id, c_id))
+            conn.commit()
+            print("Update complete.")
+            return
+
+    if args.assign_class:
+        if "=" in args.assign_class:
+            path, cls = args.assign_class.split("=", 1)
+            if path.startswith('~'): path = os.path.expanduser(path)
+            path = os.path.abspath(path).rstrip('/') or "/"
+            
+            cursor = conn.execute("SELECT class_id FROM folder_classes WHERE class_name = ?", (cls,))
+            row = cursor.fetchone()
+            if row:
+                print(f"Assigning class '{cls}' to {path} and subfolders...")
+                count = propagate_folder_attribute(conn, path, 'class_id', row['class_id'])
+                conn.commit()
+                if count == 0:
+                    print(f"Warning: Path '{path}' not found in registry. You may need to scan it first.")
+                else:
+                    print(f"Updated {count} folders in the database.")
+            else:
+                print(f"Error: Folder class '{cls}' not found.")
             return
 
     if args.scan:
@@ -491,29 +671,46 @@ def main():
                                 last_modified=excluded.last_modified,
                                 last_scanned=excluded.last_scanned
                         """, (device_id, f_path, f_data["size"], f_data["mtime"], datetime.now(timezone.utc)))
+                        
+                        # Mark the parent path as drilled now that children are recorded
+                        conn.execute("UPDATE folders SET drilled=1 WHERE device_id=? AND path=?", (device_id, path_to_scan))
                     conn.commit()
             except Exception as e:
                 print(f"  Error scanning folders: {e}")
 
     if args.report:
         print(f"\n{'LOCAL VS IDRIVE BACKUP REPORT':^95}")
-        print(f"{'Local Path':<40} | {'Size (GB)':>10} | {'Modified':<20} | {'IDrive Status':<20} | {'Tag'}")
-        print("-" * 135)
+        print(f"{'Local Path':<40} | {'Size (GB)':>10} | {'Modified':<18} | {'Class (Priority/Policy)':<25} | {'IDrive Status'}")
+        print("-" * 145)
         
-        cursor = conn.execute("SELECT f.path, f.size_bytes, f.last_modified, f.tag, f.notes FROM folders f ORDER BY f.size_bytes DESC")
+        cursor = conn.execute("""
+            SELECT f.path, f.size_bytes, f.last_modified, f.tag, c.class_name, pr.priority_name, p.policy_name, f.notes 
+            FROM folders f 
+            LEFT JOIN folder_classes c ON f.class_id = c.class_id 
+            LEFT JOIN folder_priorities pr ON c.priority_id = pr.priority_id
+            LEFT JOIN backup_policies p ON pr.backup_policy_id = p.policy_id
+            ORDER BY f.size_bytes DESC
+        """)
         for row in cursor:
             path = row['path']
             size_gb = row['size_bytes'] / (1024**3)
             mtime = row['last_modified']
             mtime_str = datetime.fromtimestamp(mtime).strftime('%Y-%m-%d %H:%M') if mtime else "Unknown"
-            tag = row['tag'] or ""
-            idrive_data = get_idrive_backup_info(path)
+            folder_class = row['class_name'] or "Default"
+            priority = row['priority_name'] or "Unknown"
+            policy = row['policy_name'] or "IDriveBackup"
             
-            idrive_size = (idrive_data['size'] or 0) if idrive_data else 0
-            status = f"Backed Up ({idrive_size/(1024**3):.1f}GB)" if idrive_data else "MISSING"
-            print(f"{path[:40]:<40} | {size_gb:>10.2f} | {mtime_str:<20} | {status:<20} | {tag}")
+            if policy in ("IgnoreBackup", "SingleCopyNoBackup"):
+                status = "IGNORED"
+            else:
+                idrive_data = get_idrive_backup_info(path)
+                idrive_size = (idrive_data['size'] or 0) if idrive_data else 0
+                status = f"Backed Up ({idrive_size/(1024**3):.1f}GB)" if idrive_data else "MISSING"
+                
+            class_info = f"{folder_class} ({priority}/{policy})"
+            print(f"{path[:40]:<40} | {size_gb:>10.2f} | {mtime_str:<18} | {class_info:<25} | {status}")
 
-    if not any([args.scan, args.report, args.tag]):
+    if not any([args.scan, args.report, args.tag, args.define_class, args.assign_class, args.update_class]):
         parser.print_help()
 
     conn.commit()
