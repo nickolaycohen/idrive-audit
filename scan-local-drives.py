@@ -437,6 +437,7 @@ def get_idrive_backup_info(path):
 def main():
     parser = argparse.ArgumentParser(description="Scan local drives and reconcile with IDrive backups.")
     parser.add_argument("--scan", action="store_true", help="Scan attached drives and top-level folders")
+    parser.add_argument("--force", action="store_true", help="Force scan even if folder mtime matches")
     parser.add_argument("--report", action="store_true", help="Show local folders and their IDrive backup status")
     parser.add_argument("--path", help="Scan only a specific path")
     parser.add_argument("--tag", help="Tag a folder: --tag '/Users/name/Photos=Memories'")
@@ -595,7 +596,7 @@ def main():
                 device_name, device_type, filesystem_uuid, capacity_bytes, last_seen
             ) VALUES (?, ?, ?, ?, ?)
             ON CONFLICT(filesystem_uuid) DO UPDATE SET last_seen=excluded.last_seen
-            """, (name, device_type, uuid, capacity, datetime.now(timezone.utc)))
+            """, (name, device_type, uuid, capacity, datetime.now(timezone.utc).isoformat()))
 
             cursor = conn.execute("SELECT device_id FROM devices WHERE filesystem_uuid=?", (uuid,))
             row = cursor.fetchone()
@@ -622,7 +623,7 @@ def main():
                 INSERT INTO device_usage (
                     device_id, recorded_at, total_bytes, used_bytes, free_bytes
                 ) VALUES (?, ?, ?, ?, ?)
-                """, (device_id, datetime.now(timezone.utc), total, used, free))
+                    """, (device_id, datetime.now(timezone.utc).isoformat(), total, used, free))
                 print(f"  Usage snapshot updated for {name}.")
             else:
                 # Usage is the same. Prune any duplicate entries that might exist from previous runs.
@@ -648,7 +649,7 @@ def main():
                     size_bytes=excluded.size_bytes, 
                     last_modified=excluded.last_modified,
                     last_scanned=excluded.last_scanned
-            """, (device_id, mount_point, used, os.path.getmtime(mount_point), datetime.now(timezone.utc)))
+            """, (device_id, mount_point, used, os.path.getmtime(mount_point), datetime.now(timezone.utc).isoformat()))
             conn.commit()
 
             try:
@@ -672,7 +673,7 @@ def main():
                     cursor_m = conn.execute("SELECT size_bytes, last_modified FROM folders WHERE device_id=? AND path=?", (device_id, path_to_scan))
                     existing_f = cursor_m.fetchone()
                     
-                    if existing_f and existing_f[1] == current_mtime:
+                    if not args.force and existing_f and existing_f[1] == current_mtime:
                         print(f"    [{i}/{len(entries_to_scan)}] Skipping: {disp_path} (Unchanged: {existing_f[0]/(1024**3):.2f} GB)")
                         continue
 
@@ -696,7 +697,7 @@ def main():
                                 size_bytes=excluded.size_bytes, 
                                 last_modified=excluded.last_modified,
                                 last_scanned=excluded.last_scanned
-                        """, (device_id, f_path, f_data["size"], f_data["mtime"], datetime.now(timezone.utc)))
+                            """, (device_id, f_path, f_data["size"], f_data["mtime"], datetime.now(timezone.utc).isoformat()))
                         
                         # Mark the parent path as drilled now that children are recorded
                         conn.execute("UPDATE folders SET drilled=1 WHERE device_id=? AND path=?", (device_id, path_to_scan))
@@ -757,3 +758,4 @@ if __name__ == "__main__":
 # python3 scan-local-drives.py --scan --path "/Volumes/asd/projects"  (to scan just a specific folder)
 # python3 scan-local-drives.py --report --output local_audit_report.txt (run report and save to file)
 # python3 scan-local-drives.py --tag "/Volumes/Extreme Pro/Photos Library/All-Media.photoslibrary=CentralPhotosLibrary"
+# python3 scan-local-drives.py --scan --force --path "/Volumes/asd/~ToDelete" (force scan even if mtime matches, useful for folders that are tagged but need rescanning)
