@@ -48,13 +48,23 @@ from urllib3.util.retry import Retry
 # python3 idrive-audit.py --start-folder /Videos --device-filter R01607197738000636951 --max-depth 1
 # python3 idrive-audit.py --device-filter R01607197738000636951 --tag "/Videos/Recently\ Added=RawAssets-Benny-iPhone3-2017-2026-Videos"
 # python3 idrive-audit.py --device-filter R01563807439000950037 --tag "/Videos/Recently\ Added=RawAssets-Nickolay-iPhone5-2017-2025-Videos"
+# 4/11
+# python3 idrive-audit.py --device-filter D01563711761000105006 --max-depth 
+# python3 idrive-audit.py --start-folder /Users  --device-filter D01563711761000105006 --max-depth 1
+# python3 idrive-audit.py --start-folder /Users --device-filter D01563711761000105006 --max-depth 1 --force --min-size 0
+# python3 idrive-audit.py --start-folder /Users/nickolaycohen --device-filter D01563711761000105006 --max-depth 1 --force --min-size 0
+# python3 idrive-audit.py --start-folder /Users/nickolaycohen/Pictures --device-filter D01563711761000105006 --max-depth 1 --force --min-size 0
+# python3 idrive-audit.py --start-folder /Users/Shared --device-filter D01563711761000105006 --max-depth 1 --force --min-size 0
+# python3 idrive-audit.py --start-folder /Users/nickolaycohen/Pictures/LightRoom\ Catalog\ and\ Data  --device-filter D01563744743000489825 --max-depth 1 --force --min-size 0
+# python3 idrive-audit.py --start-folder /Users/nickolaycohen/Pictures/LightRoom\ Catalog\ and\ Data/LightRoom\ Imported\ Media  --device-filter D01563744743000489825 --max-depth 1 --force --min-size 0
+# python3 idrive-audit.py --start-folder /Users/nickolaycohen/Pictures/Image\ Capture\ Import --device-filter D01563711761000105006 --max-depth 1 --force --min-size 0
 
 
 # --- AUTH ---
 # log into idrive website; go to Developer Tools → Application → Cookies and copy the EVSID and JSESSIONID values into the COOKIE_STR below (format: "EVSID=...; JSESSIONID=...;")
 # API call is made to browseFolder endpoint - look in Headers tab -> Request Headers → Cookie to find the correct string to use here.  This is a manual step since the cookie is periodically refreshed by the server and we want to avoid hardcoding credentials in the script.
 
-COOKIE_STR = "EVSID=QF40648Y4E20GY7UCNB8FK17YPZJAJAFZ7P727OHSK3JGK0GFXRXHE58OT0I; JSESSIONID=8B61886C82C347041DD766F56EE1BD0B.tomcat8;"
+COOKIE_STR = "EVSID=ZI68QBWT11RZU9S7BIEPZGGCEK3DISB8TU1E9DTZ2U53KOE3BFY9TE98DVSO; JSESSIONID=8B61886C82C347041DD766F56EE1BD0B.tomcat8;"
 BASE_URL = "https://evsweb2652.idrive.com/evs"
 
 HEADERS = {
@@ -355,7 +365,7 @@ def get_details(device_id, device_name, path, ignore_skip=False):
     # nothing useful found; do not insert a dummy zero-result row (avoids duplicate rows)
     return {"size": 0, "filecount": 0}
 
-def crawl(device_id, device_name, current_path, depth, max_depth=MAX_DEPTH, ignore_skip=False):
+def crawl(device_id, device_name, current_path, depth, max_depth=MAX_DEPTH, ignore_skip=False, min_size_gb=MIN_SIZE_GB):
     # canonical path for DB lookups/logging
     norm = normalize_path(current_path)
     # don't re-scan a folder if we've queried it within the last 24h
@@ -392,6 +402,7 @@ def crawl(device_id, device_name, current_path, depth, max_depth=MAX_DEPTH, igno
     for item in items:
         name = item.get('p') or item.get('name') or item.get('desc')
         if not name or name in [".", ".."]: continue
+        if SKIP_DEBUG: print(f"    [ITEM FOUND] {name}")
 
         next_path = name if name.startswith("/") else f"{current_path.rstrip('/')}/{name}"
         
@@ -399,10 +410,10 @@ def crawl(device_id, device_name, current_path, depth, max_depth=MAX_DEPTH, igno
         size_bytes = int(details.get('size', 0))
         size_gb = size_bytes / (1024**3)
 
-        if size_gb >= MIN_SIZE_GB:
+        if size_gb >= min_size_gb:
             indent = "  " * depth
             print(f"{indent} > {name[:40]:<45} | {size_gb:>10.2f} GB | {details.get('filecount', 0):>8} files")
-            crawl(device_id, device_name, next_path, depth + 1, max_depth, ignore_skip)
+            crawl(device_id, device_name, next_path, depth + 1, max_depth, ignore_skip, min_size_gb)
     # mark this folder as drilled (we processed its children)
     try:
         # Decide whether to flag this path as "drilled".
@@ -510,7 +521,7 @@ def should_skip(device_id, path, endpoint='browseFolder', hours=24):
     return result
 
 
-def run_audit(start_folder=None, one_level=False, device_filter=None, max_depth=MAX_DEPTH):
+def run_audit(start_folder=None, one_level=False, device_filter=None, max_depth=MAX_DEPTH, force=False, min_size=MIN_SIZE_GB):
     """Perform the audit.
 
     If both ``device_filter`` and ``start_folder`` are provided the script will
@@ -550,9 +561,9 @@ def run_audit(start_folder=None, one_level=False, device_filter=None, max_depth=
 
         # when a starting folder is provided we bypass skip checks but still
         # respect the requested `max_depth` behavior
-        ignore = True if start_folder else False
+        ignore = True if (start_folder or force) else False
 
-        crawl(dev['device_id'], dev['nick_name'], root, 1, limit, ignore_skip=ignore)
+        crawl(dev['device_id'], dev['nick_name'], root, 1, limit, ignore_skip=ignore, min_size_gb=min_size)
         print("-" * 85)
     
     print(f"\nAudit complete. Results saved to {OUTPUT_FILE}")
@@ -568,6 +579,8 @@ if __name__ == "__main__":
 
     parser.add_argument("--max-depth", type=int, default=MAX_DEPTH,
                         help=f"Maximum recursion depth (default {MAX_DEPTH})")
+    parser.add_argument("--force", action="store_true", help="Bypass 24h skip logic and re-scan everything")
+    parser.add_argument("--min-size", type=float, default=MIN_SIZE_GB, help=f"Minimum size in GB to display (default {MIN_SIZE_GB})")
 
     # tagging operations
     parser.add_argument("--tag", help="Mark a device/path as tagged (format path[=value], value optional)")
@@ -610,4 +623,11 @@ if __name__ == "__main__":
         conn.close()
         sys.exit(0)
 
-    run_audit(start_folder=args.start_folder, one_level=args.one_level, device_filter=args.device_filter, max_depth=args.max_depth)
+    run_audit(
+        start_folder=args.start_folder, 
+        one_level=args.one_level, 
+        device_filter=args.device_filter, 
+        max_depth=args.max_depth,
+        force=args.force,
+        min_size=args.min_size
+    )
