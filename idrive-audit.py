@@ -48,6 +48,7 @@ from urllib3.util.retry import Retry
 # python3 idrive-audit.py --start-folder /Videos --device-filter R01607197738000636951 --max-depth 1
 # python3 idrive-audit.py --device-filter R01607197738000636951 --tag "/Videos/Recently\ Added=RawAssets-Benny-iPhone3-2017-2026-Videos"
 # python3 idrive-audit.py --device-filter R01563807439000950037 --tag "/Videos/Recently\ Added=RawAssets-Nickolay-iPhone5-2017-2025-Videos"
+
 # 4/11
 # python3 idrive-audit.py --device-filter D01563711761000105006 --max-depth 
 # python3 idrive-audit.py --start-folder /Users  --device-filter D01563711761000105006 --max-depth 1
@@ -58,6 +59,9 @@ from urllib3.util.retry import Retry
 # python3 idrive-audit.py --start-folder /Users/nickolaycohen/Pictures/LightRoom\ Catalog\ and\ Data  --device-filter D01563744743000489825 --max-depth 1 --force --min-size 0
 # python3 idrive-audit.py --start-folder /Users/nickolaycohen/Pictures/LightRoom\ Catalog\ and\ Data/LightRoom\ Imported\ Media  --device-filter D01563744743000489825 --max-depth 1 --force --min-size 0
 # python3 idrive-audit.py --start-folder /Users/nickolaycohen/Pictures/Image\ Capture\ Import --device-filter D01563711761000105006 --max-depth 1 --force --min-size 0
+# python3 idrive-audit.py --device-filter R01607197738000636951 --tag "/Videos/Recently\ Added=RawAssets-Benny-iPhone3-2017-2026-Videos"
+# python3 idrive-audit.py --device-filter R01563807439000950037 --tag "/Photos=RawAssets-Nickolay-iPhone5-iPhone13ProMax-Photos"
+# python3 idrive-audit.py --device-filter R01607197738000636951 --tag "/Photos=RawAssets-Benny-iPhone5-iPhone16-Photos"
 
 
 # --- AUTH ---
@@ -207,6 +211,8 @@ def normalize_path(p):
         return "/"
     # remove leading/trailing whitespace
     p = p.strip()
+    # remove backslashes often introduced by shell auto-completion or escaping
+    p = p.replace('\\', '')
     # ensure single leading slash
     p = '/' + p.lstrip('/').rstrip('/')
     return p
@@ -385,11 +391,10 @@ def crawl(device_id, device_name, current_path, depth, max_depth=MAX_DEPTH, igno
         # log the browse call and capture the row id so we can mark drilled later
         rowid = None
         try:
-            # store using canonical path
             rowid = log_api_call(device_id, device_name, 'browseFolder', norm, res)
         except Exception:
             rowid = None
-        items = res.get('contents', [])
+        items = res.get('contents') or []
     except Exception:
         return
 
@@ -414,24 +419,17 @@ def crawl(device_id, device_name, current_path, depth, max_depth=MAX_DEPTH, igno
             indent = "  " * depth
             print(f"{indent} > {name[:40]:<45} | {size_gb:>10.2f} GB | {details.get('filecount', 0):>8} files")
             crawl(device_id, device_name, next_path, depth + 1, max_depth, ignore_skip, min_size_gb)
-    # mark this folder as drilled (we processed its children)
+
+    # Mark this folder as drilled only if we actually found and processed children.
+    # This keeps leaf folders (only files or empty) as drilled=0 per your preference.
     try:
-        # Decide whether to flag this path as "drilled".
-        #
-        # * If the caller supplied --start-folder we always mark the root
-        #   (depth==1) regardless of max_depth, since the intent was to
-        #   explicitly drill that folder.
-        # * For all other paths (including children during a targeted run),
-        #   the value of max_depth determines whether their contents were
-        #   explored; only when max_depth>1 (i.e. we went at least two levels
-        #   beneath the starting point) do we mark them.
         do_mark = False
         if ignore_skip and depth == 1:
             do_mark = True
-        elif max_depth is not None and int(max_depth) > 1:
+        elif max_depth is not None and (depth - 1) < max_depth:
             do_mark = True
 
-        if do_mark:
+        if do_mark and items:
             cur.execute(
                 'UPDATE api_calls SET drilled=1 WHERE device_id=? AND path=? AND (endpoint=? OR endpoint=?)',
                 (device_id, norm, 'browseFolder', 'getProperties')
