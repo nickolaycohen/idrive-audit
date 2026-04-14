@@ -62,13 +62,17 @@ from urllib3.util.retry import Retry
 # python3 idrive-audit.py --device-filter R01607197738000636951 --tag "/Videos/Recently\ Added=RawAssets-Benny-iPhone3-2017-2026-Videos"
 # python3 idrive-audit.py --device-filter R01563807439000950037 --tag "/Photos=RawAssets-Nickolay-iPhone5-iPhone13ProMax-Photos"
 # python3 idrive-audit.py --device-filter R01607197738000636951 --tag "/Photos=RawAssets-Benny-iPhone5-iPhone16-Photos"
+# python3 idrive-audit.py --start-folder /Volumes/Extreme\ Pro/Photos\ Split --device-filter D01692572940000295373 --max-depth 1 --force --min-size 0
+# python3 idrive-audit.py --start-folder /Volumes/Extreme\ Pro/ --device-filter D01692572940000295373 --max-depth 1 --force --min-size 0
+# python3 idrive-audit.py --start-folder /Volumes/Extreme\ Pro/Photos\ Split --device-filter D01692572940000295373 --max-depth 1 --force --min-size 0
+# python3 idrive-audit.py --start-folder /Volumes/Extreme\ Pro/Photos\ Library --device-filter D01692572940000295373 --max-depth 1 --force --min-size 0
 
 
 # --- AUTH ---
 # log into idrive website; go to Developer Tools → Application → Cookies and copy the EVSID and JSESSIONID values into the COOKIE_STR below (format: "EVSID=...; JSESSIONID=...;")
 # API call is made to browseFolder endpoint - look in Headers tab -> Request Headers → Cookie to find the correct string to use here.  This is a manual step since the cookie is periodically refreshed by the server and we want to avoid hardcoding credentials in the script.
 
-COOKIE_STR = "EVSID=ZI68QBWT11RZU9S7BIEPZGGCEK3DISB8TU1E9DTZ2U53KOE3BFY9TE98DVSO; JSESSIONID=8B61886C82C347041DD766F56EE1BD0B.tomcat8;"
+COOKIE_STR = "EVSID=AV40LF9MF1VZWUUM73XAJAL01VALC3Y9CH7H0SMD9M9S9DQ0CT6CJ74CNNJ2; JSESSIONID=8B61886C82C347041DD766F56EE1BD0B.tomcat8;"
 BASE_URL = "https://evsweb2652.idrive.com/evs"
 
 HEADERS = {
@@ -247,6 +251,11 @@ def log_api_call(device_id, device_name, endpoint, path, details):
         filecount_val = None
     resp_json = json.dumps(details) if details is not None else None
 
+    # Carry over existing tags when updating or inserting new audit records
+    cur.execute("SELECT tag FROM api_calls WHERE device_id=? AND path=? AND tag != '' LIMIT 1", (device_id, norm_path))
+    tag_row = cur.fetchone()
+    inherited_tag = tag_row['tag'] if tag_row else ''
+
     # try to find an existing row for this device/endpoint/path and update it
     try:
         cur.execute(
@@ -256,7 +265,7 @@ def log_api_call(device_id, device_name, endpoint, path, details):
         existing = cur.fetchone()
         if existing:
             cur.execute(
-                "UPDATE api_calls SET timestamp=?, device_name=?, size=?, filecount=?, lmd=?, response_json=? WHERE id=?",
+                "UPDATE api_calls SET timestamp=?, device_name=?, size=?, filecount=?, lmd=?, response_json=?, tag=? WHERE id=?",
                 (
                     datetime.utcnow().isoformat(),
                     device_name,
@@ -264,6 +273,7 @@ def log_api_call(device_id, device_name, endpoint, path, details):
                     filecount_val,
                     lmd_val,
                     resp_json,
+                    inherited_tag,
                     existing['id']
                 )
             )
@@ -275,8 +285,8 @@ def log_api_call(device_id, device_name, endpoint, path, details):
 
     cur.execute(
         '''
-        INSERT INTO api_calls (timestamp, device_id, device_name, endpoint, path, size, filecount, lmd, response_json)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO api_calls (timestamp, device_id, device_name, endpoint, path, size, filecount, lmd, response_json, tag)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''',
         (
             datetime.utcnow().isoformat(),
@@ -287,7 +297,8 @@ def log_api_call(device_id, device_name, endpoint, path, details):
             size_val,
             filecount_val,
             lmd_val,
-            resp_json
+            resp_json,
+            inherited_tag
         )
     )
     rowid = cur.lastrowid
@@ -374,6 +385,19 @@ def get_details(device_id, device_name, path, ignore_skip=False):
 def crawl(device_id, device_name, current_path, depth, max_depth=MAX_DEPTH, ignore_skip=False, min_size_gb=MIN_SIZE_GB):
     # canonical path for DB lookups/logging
     norm = normalize_path(current_path)
+
+    # If starting a forced or targeted scan (depth 1), reset existing sizes for this path 
+    # and immediate children to 0. This preserves data from deeper historical scans 
+    # while ensuring deleted items at this level are correctly reflected.
+    if depth == 1 and ignore_skip:
+        child_pattern = norm.rstrip('/') + '/%'
+        exclude_pattern = norm.rstrip('/') + '/%/%'
+        cur.execute(
+            "UPDATE api_calls SET size=0, filecount=0 WHERE device_id=? AND (path=? OR (path LIKE ? AND path NOT LIKE ?))",
+            (device_id, norm, child_pattern, exclude_pattern)
+        )
+        conn.commit()
+
     # don't re-scan a folder if we've queried it within the last 24h
     if not ignore_skip and should_skip(device_id, norm):
         print(f"  (skipping {norm} for {device_name} — scanned <24h ago)")
@@ -458,27 +482,17 @@ def tag_folder(device_id, device_name, path, tag_value):
     Empty string means untagged.
     """
     norm = normalize_path(path)
-    # try to find a getProperties record first
-    cur.execute(
-        "SELECT id FROM api_calls WHERE device_id=? AND path=? AND endpoint='getProperties' ORDER BY timestamp DESC LIMIT 1",
-        (device_id, norm)
-    )
-    existing = cur.fetchone()
-    if not existing:
-        # fall back to any endpoint
-        cur.execute(
-            "SELECT id FROM api_calls WHERE device_id=? AND path=? ORDER BY timestamp DESC LIMIT 1",
-            (device_id, norm)
-        )
-        existing = cur.fetchone()
-    if existing:
-        cur.execute("UPDATE api_calls SET tag=? WHERE id=?", (tag_value, existing['id']))
-    else:
-        # insert a new row with endpoint=getProperties so the record is included
+    
+    # Update all existing rows for this path and device to ensure the tag is visible
+    cur.execute("UPDATE api_calls SET tag=? WHERE device_id=? AND path=?", (tag_value, device_id, norm))
+    
+    # If no rows existed, insert a placeholder record
+    if cur.rowcount == 0:
         cur.execute(
             "INSERT INTO api_calls (timestamp, device_id, device_name, endpoint, path, tag) VALUES (?, ?, ?, 'getProperties', ?, ?)",
             (datetime.utcnow().isoformat(), device_id, device_name, norm, tag_value)
         )
+
     conn.commit()
 
 
