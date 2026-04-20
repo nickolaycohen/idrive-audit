@@ -759,3 +759,5 @@ if __name__ == "__main__":
 # python3 scan-local-drives.py --report --output local_audit_report.txt (run report and save to file)
 # python3 scan-local-drives.py --tag "/Volumes/Extreme Pro/Photos Library/All-Media.photoslibrary=CentralPhotosLibrary"
 # python3 scan-local-drives.py --scan --force --path "/Volumes/asd/~ToDelete" (force scan even if mtime matches, useful for folders that are tagged but need rescanning)
+# python3 scan-local-drives.py --scan --force --path "/Volumes/Extreme Pro/iDrive Restore MacBookPro/NickolaysMacmini" (force scan even if mtime matches, useful for folders that are tagged but need rescanning)
+
