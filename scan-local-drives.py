@@ -471,14 +471,28 @@ def main():
     if args.define_class:
         if "=" in args.define_class:
             name, pr_name = args.define_class.split("=", 1)
-            # Lookup Priority ID
-            pr_row = conn.execute("SELECT priority_id FROM folder_priorities WHERE priority_name = ?", (pr_name,)).fetchone()
-            pr_id = pr_row['priority_id'] if pr_row else 1
             
-            print(f"Defining class '{name}' linked to priority '{pr_name}' (ID: {pr_id})...")
-            conn.execute("INSERT OR REPLACE INTO folder_classes (class_name, priority_id) VALUES (?, ?)", (name, pr_id))
-            conn.commit()
-            return
+            # Smart Priority Resolution: Try to extract numeric level from prefix (e.g., '9' from '9-ApplePhotosTempExport')
+            pr_id = None
+            first_part = pr_name.split('-')[0]
+            if first_part.isdigit():
+                check = conn.execute("SELECT priority_id FROM folder_priorities WHERE priority_id = ?", (first_part,)).fetchone()
+                if check:
+                    pr_id = check['priority_id']
+            
+            # Fallback to exact name lookup if prefix resolution failed
+            if pr_id is None:
+                pr_row = conn.execute("SELECT priority_id FROM folder_priorities WHERE priority_name = ?", (pr_name,)).fetchone()
+                if pr_row:
+                    pr_id = pr_row['priority_id']
+
+            if pr_id is not None:
+                print(f"Defining class '{name}' linked to priority ID {pr_id}...")
+                conn.execute("INSERT OR REPLACE INTO folder_classes (class_name, priority_id) VALUES (?, ?)", (name, pr_id))
+                conn.commit()
+            else:
+                print(f"Error: Could not resolve priority '{pr_name}' to a valid ID.")
+        return
 
     if args.update_class:
         # Format: ID=NAME=PRIORITY
@@ -772,3 +786,7 @@ if __name__ == "__main__":
 # python3 scan-local-drives.py --scan --force --path "/Volumes/Extreme Pro/iDrive Restore MacBookPro/NickolaysMacmini" (force scan even if mtime matches, useful for folders that are tagged but need rescanning)
 # python3 scan-local-drives.py --scan --force --path "/Users/nickolaycohen/.Trash/Smart Album - iPhone 16 Pro Photos"
 # python3 scan-local-drives.py --scan --force --path "/Volumes/asd/copy of folder from MBP - check import to Apple Photos All Media Library and Delete"
+# python3 scan-local-drives.py --define-class 'Media=9-ApplePhotosTempExport'
+# python3 scan-local-drives.py --assign-class '/Users/nickolaycohen/Pictures/Apple Photo Exports/=ApplePhotosTempExport'
+
+# python3 scan-local-drives.py --define-class "ApplePhotosTempExport=9-ApplePhotosTempExport"
