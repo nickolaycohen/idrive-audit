@@ -68,7 +68,7 @@ from urllib3.util.retry import Retry
 # python3 idrive-audit.py --start-folder /Volumes/Extreme\ Pro/Photos\ Library --device-filter D01692572940000295373 --max-depth 1 --force --min-size 0
 
 # 4/18
-#python3 idrive-audit.py --start-folder /Users/nickolaycohen/Pictures --device-filter D01563711761000105006 --max-depth 1 --force --min-size 0
+# python3 idrive-audit.py --start-folder /Users/nickolaycohen/Pictures --device-filter D01563711761000105006 --max-depth 1 --force --min-size 0
 
 
 # --- AUTH ---

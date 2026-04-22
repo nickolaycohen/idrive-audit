@@ -771,3 +771,4 @@ if __name__ == "__main__":
 # python3 scan-local-drives.py --scan --force --path "/Volumes/asd/~ToDelete" (force scan even if mtime matches, useful for folders that are tagged but need rescanning)
 # python3 scan-local-drives.py --scan --force --path "/Volumes/Extreme Pro/iDrive Restore MacBookPro/NickolaysMacmini" (force scan even if mtime matches, useful for folders that are tagged but need rescanning)
 # python3 scan-local-drives.py --scan --force --path "/Users/nickolaycohen/.Trash/Smart Album - iPhone 16 Pro Photos"
+# python3 scan-local-drives.py --scan --force --path "/Volumes/asd/copy of folder from MBP - check import to Apple Photos All Media Library and Delete"
