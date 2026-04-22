@@ -678,6 +678,16 @@ def main():
                         continue
 
                     print(f"    [{i}/{len(entries_to_scan)}] Processing: {disp_path}", end="", flush=True)
+
+                    if args.force:
+                        # Reset existing sizes for this path and all descendants to ensure
+                        # deleted items are correctly reflected in the report.
+                        search_pattern = path_to_scan.rstrip('/') + '/%'
+                        conn.execute(
+                            "UPDATE folders SET size_bytes=0 WHERE device_id=? AND (path=? OR path LIKE ?)",
+                            (device_id, path_to_scan, search_pattern)
+                        )
+
                     size_bytes, found_folders, _ = scan_folder(path_to_scan, min_size_gb=args.min_size)
                     size_gb = size_bytes / (1024**3) if size_bytes else 0
                     print(f" -> {disp_path}: {size_gb:.2f} GB")
@@ -760,4 +770,4 @@ if __name__ == "__main__":
 # python3 scan-local-drives.py --tag "/Volumes/Extreme Pro/Photos Library/All-Media.photoslibrary=CentralPhotosLibrary"
 # python3 scan-local-drives.py --scan --force --path "/Volumes/asd/~ToDelete" (force scan even if mtime matches, useful for folders that are tagged but need rescanning)
 # python3 scan-local-drives.py --scan --force --path "/Volumes/Extreme Pro/iDrive Restore MacBookPro/NickolaysMacmini" (force scan even if mtime matches, useful for folders that are tagged but need rescanning)
-
+# python3 scan-local-drives.py --scan --force --path "/Users/nickolaycohen/.Trash/Smart Album - iPhone 16 Pro Photos"
