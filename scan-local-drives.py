@@ -304,6 +304,11 @@ def init_db():
             conn.execute("ALTER TABLE folders ADD COLUMN tag TEXT")
             conn.commit()
 
+        if "finder_tag" not in columns:
+            print("Adding finder_tag column to folders table...")
+            conn.execute("ALTER TABLE folders ADD COLUMN finder_tag TEXT")
+            conn.commit()
+
         if "drilled" not in columns:
             print("Adding drilled column to folders table...")
             conn.execute("ALTER TABLE folders ADD COLUMN drilled BOOLEAN DEFAULT 0")
@@ -338,6 +343,7 @@ def init_db():
                     last_scanned DATETIME,
                     needs_tag BOOLEAN DEFAULT 0, -- Legacy flag
                     tag TEXT,
+                    finder_tag TEXT,
                     drilled BOOLEAN DEFAULT 0,
                     class_id INTEGER DEFAULT 1,
                     notes TEXT,
@@ -353,8 +359,8 @@ def init_db():
                 class_map_expr = "1"
 
             conn.execute("""
-                INSERT INTO folders_new (folder_id, device_id, path, size_bytes, last_modified, last_scanned, needs_tag, tag, drilled, class_id, notes)
-                SELECT folder_id, device_id, path, size_bytes, last_modified, last_scanned, needs_tag, tag, drilled, """ + class_map_expr + """, notes
+                INSERT INTO folders_new (folder_id, device_id, path, size_bytes, last_modified, last_scanned, needs_tag, tag, finder_tag, drilled, class_id, notes)
+                SELECT folder_id, device_id, path, size_bytes, last_modified, last_scanned, needs_tag, tag, finder_tag, drilled, """ + class_map_expr + """, notes
                 FROM (
                     SELECT *, ROW_NUMBER() OVER (PARTITION BY device_id, path ORDER BY last_scanned DESC) as rn
                     FROM folders
@@ -375,6 +381,7 @@ def init_db():
                 last_scanned DATETIME,
                 needs_tag BOOLEAN DEFAULT 0,
                 tag TEXT,
+                finder_tag TEXT,
                 drilled BOOLEAN DEFAULT 0,
                 class_id INTEGER DEFAULT 1,
                 notes TEXT,
@@ -441,6 +448,7 @@ def main():
     parser.add_argument("--report", action="store_true", help="Show local folders and their IDrive backup status")
     parser.add_argument("--path", help="Scan only a specific path")
     parser.add_argument("--tag", help="Tag a folder: --tag '/Users/name/Photos=Memories'")
+    parser.add_argument("--finder-tag", help="Set Finder Tag for a folder: --finder-tag '/path/to/dir=Red'")
     parser.add_argument("--output", help="Save the output to a specific file (e.g., report.txt)")
     parser.add_argument("--define-class", help="Define a folder class and priority: --define-class 'Media=1-PersonalData'")
     parser.add_argument("--assign-class", help="Assign a class to a folder: --assign-class '/path/to/dir=Media'")
@@ -461,6 +469,21 @@ def main():
             
             print(f"Tagging {t_path} and subfolders as '{t_val}'...")
             count = propagate_folder_attribute(conn, t_path, 'tag', t_val)
+            conn.commit()
+            if count == 0:
+                print(f"Warning: Path '{t_path}' not found in registry. You may need to scan it first.")
+            else:
+                print(f"Updated {count} folders in the database.")
+            return
+
+    if args.finder_tag:
+        if "=" in args.finder_tag:
+            t_path, t_val = args.finder_tag.split("=", 1)
+            if t_path.startswith('~'): t_path = os.path.expanduser(t_path)
+            t_path = os.path.abspath(t_path).rstrip('/') or "/"
+            
+            print(f"Setting Finder Tag for {t_path} and subfolders as '{t_val}'...")
+            count = propagate_folder_attribute(conn, t_path, 'finder_tag', t_val)
             conn.commit()
             if count == 0:
                 print(f"Warning: Path '{t_path}' not found in registry. You may need to scan it first.")
@@ -731,13 +754,13 @@ def main():
 
     if args.report:
         print(f"\n{'LOCAL VS IDRIVE BACKUP REPORT':^190}")
-        print(f"{'Local Path':<60} | {'Size (GB)':>10} | {'Modified':<18} | {'Class (Priority/Policy)':<50} | {'IDrive Status'}")
+        print(f"{'Local Path':<60} | {'Size (GB)':>10} | {'Modified':<18} | {'Class (Priority/Policy)':<50} | {'Finder Tag':<15} | {'IDrive Status'}")
         print("-" * 190)
         
         cursor = conn.execute("""
-            SELECT f.path, f.size_bytes, f.last_modified, f.tag, c.class_name, pr.priority_name, p.policy_name, f.notes 
+            SELECT f.path, f.size_bytes, f.last_modified, f.tag, f.finder_tag, c.class_name, pr.priority_name, p.policy_name, f.notes 
             FROM folders f 
-            LEFT JOIN folder_classes c ON f.class_id = c.class_id 
+            LEFT JOIN folder_classes c ON f.class_id = c.class_id
             LEFT JOIN folder_priorities pr ON c.priority_id = pr.priority_id
             LEFT JOIN backup_policies p ON pr.backup_policy_id = p.policy_id
             ORDER BY f.size_bytes DESC
@@ -751,6 +774,7 @@ def main():
             folder_class = row['class_name'] or "Default"
             priority = row['priority_name'] or "Unknown"
             policy = row['policy_name'] or "IDriveBackup"
+            finder_tag = row['finder_tag'] or ""
             
             if policy in ("IgnoreBackup", "SingleCopyNoBackup"):
                 status = "IGNORED"
@@ -760,7 +784,7 @@ def main():
                 status = f"Backed Up ({idrive_size/(1024**3):.1f}GB)" if idrive_data else "MISSING"
                 
             class_info = f"{folder_class} ({priority}/{policy})"
-            print(f"{path[:60]:<60} | {size_gb:>10.2f} | {mtime_str:<18} | {class_info:<50} | {status}")
+            print(f"{path[:60]:<60} | {size_gb:>10.2f} | {mtime_str:<18} | {class_info:<50} | {finder_tag:<15} | {status}")
 
     if not any([args.scan, args.report, args.tag, args.define_class, args.assign_class, args.update_class, args.set_drilled]):
         parser.print_help()
@@ -785,8 +809,12 @@ if __name__ == "__main__":
 # python3 scan-local-drives.py --scan --force --path "/Volumes/asd/~ToDelete" (force scan even if mtime matches, useful for folders that are tagged but need rescanning)
 # python3 scan-local-drives.py --scan --force --path "/Volumes/Extreme Pro/iDrive Restore MacBookPro/NickolaysMacmini" (force scan even if mtime matches, useful for folders that are tagged but need rescanning)
 # python3 scan-local-drives.py --scan --force --path "/Users/nickolaycohen/.Trash/Smart Album - iPhone 16 Pro Photos"
+# python3 scan-local-drives.py --finder-tag "/Volumes/Extreme Pro/Photos=Orange"
 # python3 scan-local-drives.py --scan --force --path "/Volumes/asd/copy of folder from MBP - check import to Apple Photos All Media Library and Delete"
 # python3 scan-local-drives.py --define-class 'Media=9-ApplePhotosTempExport'
 # python3 scan-local-drives.py --assign-class '/Users/nickolaycohen/Pictures/Apple Photo Exports/=ApplePhotosTempExport'
 
 # python3 scan-local-drives.py --define-class "ApplePhotosTempExport=9-ApplePhotosTempExport"
+# python3 scan-local-drives.py --scan --force --path "/Volumes/LaCie"
+# python3 scan-local-drives.py --tag "/Volumes/Extreme Pro/Photos Library/All-Media.photoslibrary=CentralPhotosLibrary"
+# python3 scan-local-drives.py --finder-tag "/Volumes/asd/~ToDelete=tmp"
