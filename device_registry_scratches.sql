@@ -132,5 +132,5 @@ left join backup_policies bp on bp.policy_id = fp.backup_policy_id
 order by size_bytes desc
 
 update folders
-SET finder_tag = "tmp"
+SET finder_tag = NULL
 where finder_tag like '%tmp%'

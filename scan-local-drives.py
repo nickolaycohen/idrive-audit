@@ -817,4 +817,12 @@ if __name__ == "__main__":
 # python3 scan-local-drives.py --define-class "ApplePhotosTempExport=9-ApplePhotosTempExport"
 # python3 scan-local-drives.py --scan --force --path "/Volumes/LaCie"
 # python3 scan-local-drives.py --tag "/Volumes/Extreme Pro/Photos Library/All-Media.photoslibrary=CentralPhotosLibrary"
-# python3 scan-local-drives.py --finder-tag "/Volumes/asd/~ToDelete=tmp"
+
+# MBP
+# python3 scan-local-drives.py --finder-tag "/Users/nickolaycohen/Pictures/Apple Photo Exports=tmp"
+# python3 scan-local-drives.py --tag "/Users/nickolaycohen/Library=sys"
+# python3 scan-local-drives.py --assign-class '/Users/nickolaycohen/Pictures/Benny iPhone 16 Pro.photoslibrary=IDriveBackup'
+# python3 scan-local-drives.py --finder-tag "/Users/nickolaycohen/Pictures/Benny iPhone 16 Pro.photoslibrary=IDriveBackup"
+# python3 scan-local-drives.py --finder-tag "/Users/nickolaycohen/Samouil USB Stick=IDriveBackup"
+
+

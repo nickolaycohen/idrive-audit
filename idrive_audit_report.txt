@@ -1,403 +1,151 @@
-Parsed parameters: Namespace(start_folder='/Users/nickolaycohen/Pictures', one_level=False, device_filter='D01563711761000105006', max_depth=1, force=True, min_size=0.0, tag=None, untag=None, list_tags=False)
+Parsed parameters: Namespace(start_folder=None, one_level=False, device_filter=None, max_depth=1, force=False, min_size=1.0, interactive=True, tag=None, untag=None, list_tags=False)
 
-                           IDRIVE RECURSIVE ACCOUNT AUDIT                            
-Folder Hierarchy                                   |          Size |      Files
--------------------------------------------------------------------------------------
+===============================================================================================
+                                 IDRIVE STORAGE USE BY DEVICE                                  
+===============================================================================================
+Device: NickolaysMacmini       | Total Scanned Size:  2025.91 GB
+  - ...reme Pro/Photos Library/All-Media.photoslibrary |    1666.58 GB
+  - ...Extreme Pro/Photos Library/Samuil.photoslibrary |     255.24 GB
+  - /Users/nickolaycohen/Pictures/Samuil.photoslibrary |      73.12 GB
+  - ...xtreme Pro/Photos Library/Samsung.photoslibrary |       6.03 GB
+  - ...treme Pro/Photos Library/All-2007.photoslibrary |       5.02 GB
+  - ...treme Pro/Photos Library/All-2004.photoslibrary |       3.41 GB
+  - ...treme Pro/Photos Library/All-2005.photoslibrary |       2.84 GB
+  - ...treme Pro/Photos Library/All-2008.photoslibrary |       2.61 GB
+  - /Volumes/Extreme Pro/Photos Library/All-2008       |       2.56 GB
+  - ...treme Pro/Photos Library/All-2009.photoslibrary |       2.22 GB
+  - ...treme Pro/Photos Library/All-2006.photoslibrary |       1.73 GB
+  - ...ickolaycohen/Pictures/iPhone11Pro.photoslibrary |       1.60 GB
+Device: NickolaysiMac          | Total Scanned Size:   472.28 GB
+  - ...ckolaycohen/Pictures/LightRoom Catalog and Data |      57.33 GB
+  - /Pictures/Photos Library.photoslibrary             |      40.90 GB
+  - /Pictures/iPhone7-Photos-Export                    |      27.94 GB
+  - /Archives/dmg                                      |      27.04 GB
+  - ...kolaycohen/Pictures/Pipeline/2-DuplicateRemoval |      24.53 GB
+  - /DELL1TB02-Copies                                  |      23.61 GB
+  - /Archives/Movies                                   |      19.81 GB
+  - ...kolaycohen/Pictures/Pipeline/3-DuplicateRemoval |      19.24 GB
+  - ...s from processed directories - most likely dups |      16.82 GB
+  - /Archives/Formula1 Season 2009                     |      13.63 GB
+  - /Users/nickolaycohen/Pictures/Pipeline/2           |      12.03 GB
+  - /Archives/Items removed from iPhone XI Photos app  |      11.11 GB
+  - ...licated Items removed from iPhone XI Photos app |      11.11 GB
+  - /Archives/Bin-NotInUse                             |      11.02 GB
+  - /Pictures/iPhoneXIPro-ImageCapture-Import          |      10.27 GB
+  - /Archives/Google Photos Removed                    |       9.84 GB
+  - ...te Photos Fixer Pro - Thrashed Deemed Duplicate |       9.30 GB
+  - .../Pictures/iPhone13 Photos Library.photoslibrary |       9.05 GB
+  - /Archives/Formula1 Season 2010                     |       8.97 GB
+  - /Users/nickolaycohen/Pictures/Pipeline/Restore     |       8.55 GB
+  - ...Tutorial - Learn Rails By Example (LiveLessons) |       7.38 GB
+  - ...ives/Duplicate Photos Removed by PhotoSweeper X |       7.35 GB
+  - /Archives/Google+ Backup Download                  |       6.16 GB
+  - ...kolaycohen/Pictures/Pictures OTHERS - (Private) |       5.61 GB
+  - /Users/nickolaycohen/Documents                     |       5.31 GB
+  - /Archives/Benny School Docs                        |       5.30 GB
+  - /Archives/Duplicate photos removed                 |       5.19 GB
+  - /Archives/repos                                    |       4.77 GB
+  - /Archives/Pictures Raw Sources                     |       4.53 GB
+  - /!!RAID                                            |       4.00 GB
+  - /Archives/Items removed from iPhone 7 Photos app   |       3.27 GB
+  - ...plicated Items removed from iPhone 7 Photos app |       3.27 GB
+  - /Users/nickolaycohen/Pictures/Pipeline/Personal    |       3.24 GB
+  - /Archives/Duplicate Photos                         |       2.64 GB
+  - ...Fixer Pro - thrashed items as deemed duplicates |       2.62 GB
+  - /Archives/Diplucates Photos Removed by TK          |       2.32 GB
+  - /Archives/nickolay.cohen@gmail.com cleanup         |       2.31 GB
+  - /Archives/!fonts                                   |       2.12 GB
+  - /Volumes                                           |       1.85 GB
+  - /Archives/Win bins                                 |       1.70 GB
+  - /Archives/dev                                      |       1.68 GB
+  - ...olaycohen/Pictures/Pipeline/5-GooglePhotosAlbum |       1.62 GB
+  - .../Pictures/Pipeline/5-GooglePhotosAlbumPublished |       1.62 GB
+  - ...ives/Duplicate Photos Removed by Photosweeper X |       1.56 GB
+  - /Users/nickolaycohen/Pictures/Pictures COHENS BG   |       1.40 GB
+  - /Pictures/Google Photos Downloads                  |       1.33 GB
+Device: BENNY-ASUS-PC_2        | Total Scanned Size:   270.89 GB
+  - /C/iDrive-Backup-Restore-ASUS-2                    |      55.26 GB
+  - /C/iDrive-Backup-Restore-ASUS/C                    |      41.22 GB
+  - /C/Users                                           |      40.83 GB
+  - /C/iDrive-Backup-Restore-ASUS/Bin                  |      37.82 GB
+  - /C/iDrive-Backup-Restore-ASUS/Pictures             |      35.74 GB
+  - /C/iDrive-Backup-Restore-ASUS/Foreign Pictures     |      23.19 GB
+  - /C/iDrive-Backup-Restore-ASUS/Reference            |      10.69 GB
+  - /C/iDrive-Backup-Restore-ASUS/Media                |       8.32 GB
+  - /C/iDrive-Backup-Restore-ASUS/BAK                  |       7.30 GB
+  - /C/iDrive-Backup-Restore-ASUS/Projects             |       3.25 GB
+  - /C/ProgramData                                     |       2.61 GB
+  - /C/iDrive-Backup-Restore-ASUS/Camera Movies        |       2.49 GB
+  - /C/iDrive-Backup-Restore-ASUS/Dev                  |       1.02 GB
+Device: ASUS                   | Total Scanned Size:   242.67 GB
+  - /C/RAID2/RAID1                                     |      76.22 GB
+  - /C/Niki                                            |      42.23 GB
+  - /C/DELL1TB02/Documents And Settings                |      34.63 GB
+  - /C/Users                                           |      33.61 GB
+  - /C/DELL1TB02/Lee Backup                            |      33.08 GB
+  - /C/DELL1TB02/2013-12-05_D                          |       9.93 GB
+  - /C/ASUS Restore                                    |       8.98 GB
+  - /C/DELL1TB02/Olga                                  |       2.11 GB
+  - /C/MS Backup Restore                               |       1.35 GB
+Device: iPhone (5)             | Total Scanned Size:   204.09 GB
+  - /Videos                                            |     126.68 GB
+  - /Photos                                            |      77.41 GB
+Device: iPhone (3)             | Total Scanned Size:   126.56 GB
+  - /Videos                                            |      74.04 GB
+  - /Photos                                            |      52.52 GB
+Device: NickolaysMacBookPro2   | Total Scanned Size:   114.95 GB
+  - ...ohen/Pictures/Benny iPhone 16 Pro.photoslibrary |      28.38 GB
+  - /Users/nickolaycohen/Samouil USB Stick             |      19.28 GB
+  - ...aycohen/Pictures/Benny Red IPhone.photoslibrary |      17.71 GB
+  - ...olaycohen/Pictures/Photos Library.photoslibrary |      17.13 GB
+  - ...ckolaycohen/Pictures/Nina Wedding.photoslibrary |      16.56 GB
+  - ...rs/nickolaycohen/Pictures/Samouil.photoslibrary |      11.79 GB
+  - .../Pictures/Photos Library MBPM4Pro.photoslibrary |       2.43 GB
+  - ...rs/nickolaycohen/Pictures/Private.photoslibrary |       1.65 GB
+Device: NickolaysMacBookPro    | Total Scanned Size:    88.80 GB
+  - /Users/Shared                                      |      69.48 GB
+  - /Copy of freenas                                   |       6.31 GB
+  - /copy of iMac 2010 Macintosh HD                    |       5.98 GB
+  - /!!RAID                                            |       4.00 GB
+  - /Volumes                                           |       1.61 GB
+  - /opt                                               |       1.02 GB
+Device: LAPTOP-BRBMTA5B        | Total Scanned Size:    21.16 GB
+  - /C                                                 |      21.16 GB
+Device: Nickolay's iPad        | Total Scanned Size:     1.77 GB
+  - /Videos                                            |       1.31 GB
+Device: Milena’s iPad          | Total Scanned Size:     0.38 GB
+  - (no top-level folders >= 1.00 GB)
+===============================================================================================
 
-DEVICE: NickolaysMacBookPro (D01563711761000105006)
-    [ITEM FOUND] 2019-06-01
-   > 2019-06-01                                    |       0.00 GB |        2 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2019-06-01 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2018-08-30
-   > 2018-08-30                                    |       0.61 GB |      166 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2018-08-30 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2019-07-27
-   > 2019-07-27                                    |       0.00 GB |        1 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2019-07-27 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2018-12-01
-   > 2018-12-01                                    |       0.56 GB |       57 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2018-12-01 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2019-02-09
-   > 2019-02-09                                    |       0.15 GB |        7 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2019-02-09 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 22 Photos
-   > 22 Photos                                     |       0.03 GB |       25 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/22 Photos on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2018-04-28
-   > 2018-04-28                                    |       0.07 GB |       16 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2018-04-28 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2019-05-02
-   > 2019-05-02                                    |       0.37 GB |        7 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2019-05-02 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2018-09-02
-   > 2018-09-02                                    |       0.09 GB |       42 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2018-09-02 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 20170705
-   > 20170705                                      |       0.00 GB |        1 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/20170705 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2017-12-02
-   > 2017-12-02                                    |       0.95 GB |      272 files
-    [ITEM FOUND] 2018-12-15
-   > 2018-12-15                                    |       0.07 GB |       18 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2018-12-15 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] Photo Booth Library
-   > Photo Booth Library                           |       0.00 GB |        4 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/Photo Booth Library on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2019-09-13
-   > 2019-09-13                                    |       0.24 GB |       55 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2019-09-13 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] iPhoto Library.photoslibrary
-   > iPhoto Library.photoslibrary                  |       0.01 GB |      114 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/iPhoto Library.photoslibrary on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2018-08-25
-   > 2018-08-25                                    |       0.44 GB |       37 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2018-08-25 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2019-03-02
-   > 2019-03-02                                    |       0.03 GB |        8 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2019-03-02 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] iPhoto-Export
-   > iPhoto-Export                                 |       6.24 GB |     1445 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/iPhoto-Export on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2019-01-27
-   > 2019-01-27                                    |       0.02 GB |        6 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2019-01-27 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] New Folder
-   > New Folder                                    |       0.03 GB |       59 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/New Folder on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2019-11-18
-   > 2019-11-18                                    |       0.22 GB |       34 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2019-11-18 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2019-07-12
-   > 2019-07-12                                    |       0.01 GB |        5 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2019-07-12 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] Curated Images
-   > Curated Images                                |       4.52 GB |     1465 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/Curated Images on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2019-04-05
-   > 2019-04-05                                    |       0.02 GB |        7 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2019-04-05 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2018-08-23
-   > 2018-08-23                                    |       0.50 GB |       90 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2018-08-23 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] synagogue
-   > synagogue                                     |       0.01 GB |        8 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/synagogue on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2019-09-01
-   > 2019-09-01                                    |       0.02 GB |        6 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2019-09-01 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2019-08-02
-   > 2019-08-02                                    |       0.00 GB |        2 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2019-08-02 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2019-04-28
-   > 2019-04-28                                    |       0.05 GB |        5 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2019-04-28 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2019-09-28
-   > 2019-09-28                                    |       0.04 GB |       12 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2019-09-28 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2017-07-23
-   > 2017-07-23                                    |       0.56 GB |      193 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2017-07-23 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2017-12-30
-   > 2017-12-30                                    |       0.37 GB |       20 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2017-12-30 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2019-10-06
-   > 2019-10-06                                    |       0.02 GB |        6 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2019-10-06 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2018-12-28
-   > 2018-12-28                                    |       0.01 GB |        4 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2018-12-28 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] Roberto Project Sep 2019
-   > Roberto Project Sep 2019                      |       0.02 GB |        8 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/Roberto Project Sep 2019 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2019-07-07
-   > 2019-07-07                                    |       0.00 GB |        1 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2019-07-07 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2019-11-03
-   > 2019-11-03                                    |       0.20 GB |       80 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2019-11-03 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2018-08-29
-   > 2018-08-29                                    |       0.23 GB |      134 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2018-08-29 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2018-05-13
-   > 2018-05-13                                    |       0.02 GB |        6 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2018-05-13 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2018-11-18
-   > 2018-11-18                                    |       0.01 GB |        3 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2018-11-18 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2018-04-01
-   > 2018-04-01                                    |       0.22 GB |       52 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2018-04-01 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2018-12-29
-   > 2018-12-29                                    |       0.03 GB |       11 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2018-12-29 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2018-08-19
-   > 2018-08-19                                    |       0.24 GB |      138 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2018-08-19 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2019-01-27_2
-   > 2019-01-27_2                                  |       0.58 GB |        9 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2019-01-27_2 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] Luminar 4 Catalog
-   > Luminar 4 Catalog                             |       0.02 GB |       49 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/Luminar 4 Catalog on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] Downloaded Albums
-   > Downloaded Albums                             |       5.98 GB |    13059 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/Downloaded Albums on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2018-12-26
-   > 2018-12-26                                    |       0.05 GB |       12 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2018-12-26 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] Evas Pictures
-   > Evas Pictures                                 |       2.13 GB |      963 files
-    [ITEM FOUND] 2018-07-15
-   > 2018-07-15                                    |       0.93 GB |      180 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2018-07-15 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2018-06-16
-   > 2018-06-16                                    |       0.13 GB |       24 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2018-06-16 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2018-08-27
-   > 2018-08-27                                    |       1.23 GB |      183 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2018-08-27 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2019-09-08
-   > 2019-09-08                                    |       0.05 GB |       17 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2019-09-08 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2019-08-25
-   > 2019-08-25                                    |       0.29 GB |       77 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2019-08-25 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] dups
-   > dups                                          |       0.13 GB |      558 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/dups on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] Temp.photoslibrary
-   > Temp.photoslibrary                            |       0.31 GB |      376 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/Temp.photoslibrary on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] iPhoto Library.photolibrary
-   > iPhoto Library.photolibrary                   |       0.01 GB |       42 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/iPhoto Library.photolibrary on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] Nikon.photoslibrary
-   > Nikon.photoslibrary                           |       7.99 GB |      506 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/Nikon.photoslibrary on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] Gmail Removed Images
-   > Gmail Removed Images                          |       0.03 GB |        9 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/Gmail Removed Images on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 15-15 Printouts
-   > 15-15 Printouts                               |       0.08 GB |       56 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/15-15 Printouts on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2019-02-23
-   > 2019-02-23                                    |       0.26 GB |        2 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2019-02-23 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2019-09-06
-   > 2019-09-06                                    |       0.33 GB |       66 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2019-09-06 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2019-08-17
-   > 2019-08-17                                    |       0.20 GB |       42 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2019-08-17 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2019-09-19
-   > 2019-09-19                                    |       0.03 GB |        8 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2019-09-19 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] import
-   > import                                        |       0.65 GB |       51 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/import on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2018-06-24
-   > 2018-06-24                                    |       0.24 GB |       69 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2018-06-24 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] Image Capture Import
-   > Image Capture Import                          |      42.20 GB |    13493 files
-    [ITEM FOUND] 2017-07-22
-   > 2017-07-22                                    |       0.21 GB |       77 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2017-07-22 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2019-03-17
-   > 2019-03-17                                    |       0.07 GB |       18 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2019-03-17 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] Niki at Sofia
-   > Niki at Sofia                                 |       0.01 GB |        7 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/Niki at Sofia on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2019-03-09
-   > 2019-03-09                                    |       0.06 GB |       17 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2019-03-09 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2019-05-26
-   > 2019-05-26                                    |       0.15 GB |       51 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2019-05-26 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2019-07-28
-   > 2019-07-28                                    |       0.07 GB |       15 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2019-07-28 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] picts samuil
-   > picts samuil                                  |       0.01 GB |       20 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/picts samuil on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2019-08-05
-   > 2019-08-05                                    |       1.16 GB |      244 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2019-08-05 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2017-08-23_26
-   > 2017-08-23_26                                 |       3.18 GB |     1112 files
-    [ITEM FOUND] Benny iPhone Download 05292017
-   > Benny iPhone Download 05292017                |       0.92 GB |      343 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/Benny iPhone Download 05292017 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2019-04-13_14
-   > 2019-04-13_14                                 |       0.38 GB |       42 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2019-04-13_14 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2019-09-23
-   > 2019-09-23                                    |       0.01 GB |        2 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2019-09-23 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2019-09-08_2
-   > 2019-09-08_2                                  |       0.02 GB |        4 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2019-09-08_2 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2018-10-31
-   > 2018-10-31                                    |       0.48 GB |      111 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2018-10-31 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2019-03-25
-   > 2019-03-25                                    |       0.03 GB |        8 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2019-03-25 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] Photos Removed from nickolay.cohen_gmail
-   > Photos Removed from nickolay.cohen_gmail      |       0.34 GB |       77 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/Photos Removed from nickolay.cohen_gmail on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2019-11-15
-   > 2019-11-15                                    |       0.02 GB |        6 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2019-11-15 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] Benny cohen.milena@gmail.com deleted pictures
-   > Benny cohen.milena@gmail.com deleted pic      |       3.52 GB |     1046 files
-    [ITEM FOUND] CanonEOS.photoslibrary
-   > CanonEOS.photoslibrary                        |       4.91 GB |     2285 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/CanonEOS.photoslibrary on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2018-07-08
-   > 2018-07-08                                    |       0.09 GB |       17 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2018-07-08 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] templeterr21-0930-images
-   > templeterr21-0930-images                      |       0.00 GB |       33 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/templeterr21-0930-images on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2019-05-10
-   > 2019-05-10                                    |       0.46 GB |       73 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2019-05-10 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2019-11-10
-   > 2019-11-10                                    |       0.03 GB |        8 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2019-11-10 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2018-04-14
-   > 2018-04-14                                    |       0.26 GB |       54 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2018-04-14 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2019-09-15
-   > 2019-09-15                                    |       0.68 GB |      117 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2019-09-15 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2019-02-22
-   > 2019-02-22                                    |       0.51 GB |        2 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2019-02-22 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2017-11-18
-   > 2017-11-18                                    |       0.28 GB |      120 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2017-11-18 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2019-09-16
-   > 2019-09-16                                    |       0.12 GB |       34 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2019-09-16 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] various Pictures
-   > various Pictures                              |       0.25 GB |      337 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/various Pictures on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2018-06-29
-   > 2018-06-29                                    |       0.47 GB |       90 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2018-06-29 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2019-09-07
-   > 2019-09-07                                    |       0.16 GB |        2 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2019-09-07 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2017-08-04
-   > 2017-08-04                                    |       1.27 GB |      268 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2017-08-04 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] Peakto
-   > Peakto                                        |       0.57 GB |     9794 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/Peakto on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] rawImport-iPhone13ProMax
-   > rawImport-iPhone13ProMax                      |       2.58 GB |       74 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/rawImport-iPhone13ProMax on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2019-01-01
-   > 2019-01-01                                    |       0.20 GB |       62 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2019-01-01 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] Photos Library Benny iPhone12 Red.photoslibrary
-   > Photos Library Benny iPhone12 Red.photos      |       5.90 GB |     3435 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/Photos Library Benny iPhone12 Red.photoslibrary on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] milena.cohen1120@gmail.com deleted pictures
-   > milena.cohen1120@gmail.com deleted pictu      |       2.44 GB |       30 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/milena.cohen1120@gmail.com deleted pictures on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 20091231-20100101 New Year's
-   > 20091231-20100101 New Year's                  |       0.07 GB |      122 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/20091231-20100101 New Year's on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] iPhoto Library.migratedphotolibrary
-   > iPhoto Library.migratedphotolibrary           |       0.01 GB |       42 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/iPhoto Library.migratedphotolibrary on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2019-11-04
-   > 2019-11-04                                    |       0.01 GB |        4 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2019-11-04 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] Lightroom
-   > Lightroom                                     |       0.00 GB |       17 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/Lightroom on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2018-12-15_2
-   > 2018-12-15_2                                  |       0.19 GB |       40 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2018-12-15_2 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] LHSA-SOCCER-2019
-   > LHSA-SOCCER-2019                              |       0.11 GB |       97 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/LHSA-SOCCER-2019 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2019-01-19
-   > 2019-01-19                                    |       1.12 GB |       48 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2019-01-19 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] Benny-iPhone12-Red.photoslibrary
-   > Benny-iPhone12-Red.photoslibrary              |       7.14 GB |     3877 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/Benny-iPhone12-Red.photoslibrary on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] Lightroom data.local
-   > Lightroom data.local                          |       0.45 GB |      196 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/Lightroom data.local on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2018-12-09
-   > 2018-12-09                                    |       0.31 GB |       78 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2018-12-09 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2019-02-16
-   > 2019-02-16                                    |       0.18 GB |       44 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2019-02-16 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2018-11-09
-   > 2018-11-09                                    |       0.09 GB |        6 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2018-11-09 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2018-12-26_2
-   > 2018-12-26_2                                  |       0.09 GB |       26 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2018-12-26_2 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 2019-08-25_2
-   > 2019-08-25_2                                  |       0.06 GB |        9 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/2019-08-25_2 on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] database
-   > database                                      |       0.24 GB |       17 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/database on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] digikam4.db-journal
-   > digikam4.db-journal                           |       0.00 GB |        0 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/digikam4.db-journal on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 100_0154.jpg
-   > 100_0154.jpg                                  |       0.00 GB |        0 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/100_0154.jpg on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] digikam4.db
-   > digikam4.db                                   |       0.03 GB |        0 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/digikam4.db on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 000_0219.MOV
-   > 000_0219.MOV                                  |       0.01 GB |        0 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/000_0219.MOV on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 100_0159.jpg
-   > 100_0159.jpg                                  |       0.00 GB |        0 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/100_0159.jpg on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] Screenshot Troop 28.png
-   > Screenshot Troop 28.png                       |       0.00 GB |        0 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/Screenshot Troop 28.png on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] similarity.db
-   > similarity.db                                 |       0.00 GB |        0 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/similarity.db on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] recognition.db
-   > recognition.db                                |       0.00 GB |        0 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/recognition.db on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 100_0168.jpg
-   > 100_0168.jpg                                  |       0.00 GB |        0 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/100_0168.jpg on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] NC-DL.PDF
-   > NC-DL.PDF                                     |       0.00 GB |        0 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/NC-DL.PDF on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] thumbnails-digikam.db
-   > thumbnails-digikam.db                         |       0.91 GB |        0 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/thumbnails-digikam.db on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] Nickolay_i_Eli_2001.JPG
-   > Nickolay_i_Eli_2001.JPG                       |       0.00 GB |        0 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/Nickolay_i_Eli_2001.JPG on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] 100_0160.jpg
-   > 100_0160.jpg                                  |       0.00 GB |        0 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/100_0160.jpg on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-    [ITEM FOUND] NPPL1963.MOV
-   > NPPL1963.MOV                                  |       0.00 GB |        0 files
-  (not marking drilled for /Users/nickolaycohen/Pictures/NPPL1963.MOV on NickolaysMacBookPro) depth=2 max_depth=1 ignore_skip=True
-  (marked drilled: /Users/nickolaycohen/Pictures on NickolaysMacBookPro) updated_rows=2
--------------------------------------------------------------------------------------
+===============================================================================================
+                               IDRIVE ACCOUNT STORAGE MANAGEMENT                               
+===============================================================================================
 
-Audit complete. Results saved to idrive_audit_report.txt
-API call history is recorded in idrive_audit.db
+--- TAGGED FOLDERS ---
+No.  | Device                 | Path                                          |  Size (GB) | Tag       
+-----------------------------------------------------------------------------------------------
+1    | NickolaysMacmini       | ...o/Photos Library/All-Media.photoslibrary   |    1666.58 | AllMediaPhotoLibrary
+2    | NickolaysMacmini       | ... Pro/Photos Library/Samuil.photoslibrary   |     255.24 | SamuilPhotoLibrary
+3    | iPhone (5)             | /Videos                                       |     126.68 | AssetsSource-iPhone5-Videos
+4    | iPhone (5)             | /Photos                                       |      77.41 | AssetsSource-iPhone5-Photos
+5    | iPhone (3)             | /Videos                                       |      74.04 | AssetsSource-iPhone3-Videos
+6    | NickolaysMacmini       | ...kolaycohen/Pictures/Samuil.photoslibrary   |      73.12 | SamouilPhotosLibrary-Other
+7    | iPhone (3)             | /Photos                                       |      52.52 | AssetysSource-iPhone3-Photos
+-----------------------------------------------------------------------------------------------
+
+--- UNTAGGED FOLDERS (TOP 10 BY SIZE) ---
+No.  | Device                 | Path                                          |  Size (GB) | Tag       
+-----------------------------------------------------------------------------------------------
+8    | ASUS                   | /C/RAID2/RAID1                                |      76.22 | [none]    
+9    | NickolaysMacBookPro    | /Users/Shared                                 |      69.48 | [none]    
+10   | NickolaysiMac          | ...ohen/Pictures/LightRoom Catalog and Data   |      57.33 | [none]    
+11   | BENNY-ASUS-PC_2        | /C/iDrive-Backup-Restore-ASUS-2               |      55.26 | [none]    
+12   | ASUS                   | /C/Niki                                       |      42.23 | [none]    
+13   | BENNY-ASUS-PC_2        | /C/iDrive-Backup-Restore-ASUS/C               |      41.22 | [none]    
+14   | NickolaysiMac          | /Pictures/Photos Library.photoslibrary        |      40.90 | [none]    
+15   | BENNY-ASUS-PC_2        | /C/Users                                      |      40.83 | [none]    
+16   | BENNY-ASUS-PC_2        | /C/iDrive-Backup-Restore-ASUS/Bin             |      37.82 | [none]    
+17   | BENNY-ASUS-PC_2        | /C/iDrive-Backup-Restore-ASUS/Pictures        |      35.74 | [none]    
+-----------------------------------------------------------------------------------------------
+Options: Enter 1-17 to select a folder, 'r' to refresh, or 'q' to quit.
+Choice: 
