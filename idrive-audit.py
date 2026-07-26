@@ -75,7 +75,7 @@ from urllib3.util.retry import Retry
 # log into idrive website; go to Developer Tools → Application → Cookies and copy the EVSID and JSESSIONID values into the COOKIE_STR below (format: "EVSID=...; JSESSIONID=...;")
 # API call is made to browseFolder endpoint - look in Headers tab -> Request Headers → Cookie to find the correct string to use here.  This is a manual step since the cookie is periodically refreshed by the server and we want to avoid hardcoding credentials in the script.
 
-COOKIE_STR = "EVSID=XP50HRJPJM44TS7COC5Q6M404WNC129YM2QNYY4TT1GFQ41F72RTWNLWNFV6; JSESSIONID=2344EDA0CB8B1DBC6903160904A881B2.tomcat8"
+COOKIE_STR = "JSESSIONID=2344EDA0CB8B1DBC6903160904A881B2.tomcat8; EVSID=F9U66GWRW6F511WQMBY4394L4WUPP55011K0OTR4MWFAQ82JL8MTJ4QC1T7L; WOPI_SESSION=c9KXS213c6wZ"
 BASE_URL = "https://evsweb2652.idrive.com/evs"
 
 HEADERS = {
@@ -118,7 +118,8 @@ cur.execute(
         lmd TEXT,
         response_json TEXT,
         drilled INTEGER DEFAULT 0,
-        tag TEXT DEFAULT ''
+        tag TEXT DEFAULT '',
+        active INTEGER DEFAULT 1
     )
     '''
 )
@@ -146,7 +147,8 @@ for row in rows:
                 lmd TEXT,
                 response_json TEXT,
                 drilled INTEGER DEFAULT 0,
-                tag TEXT DEFAULT ''
+                tag TEXT DEFAULT '',
+                active INTEGER DEFAULT 1
             )
             '''
         )
@@ -178,6 +180,9 @@ if 'drilled' not in cols:
 if 'tag' not in cols:
     # add TEXT column defaulting to empty string
     cur.execute("ALTER TABLE api_calls ADD COLUMN tag TEXT DEFAULT ''")
+    conn.commit()
+if 'active' not in cols:
+    cur.execute('ALTER TABLE api_calls ADD COLUMN active INTEGER DEFAULT 1')
     conn.commit()
 conn.commit()
 
@@ -522,7 +527,7 @@ def print_storage_summary(min_size=MIN_SIZE_GB):
     # Fetch all getProperties rows with non-zero size
     cur.execute(
         """
-        SELECT device_id, device_name, path, size
+        SELECT device_id, device_name, path, size, tag
         FROM api_calls
         WHERE endpoint = 'getProperties' AND size IS NOT NULL AND size > 0
         ORDER BY device_name, path
@@ -536,13 +541,14 @@ def print_storage_summary(min_size=MIN_SIZE_GB):
         dev_name = row['device_name']
         path = row['path']
         size = row['size']
+        tag = row['tag'] if row['tag'] else ''
         
         if dev_id not in devices:
             devices[dev_id] = {
                 'name': dev_name,
                 'folders': []
             }
-        devices[dev_id]['folders'].append({'path': path, 'size': size})
+        devices[dev_id]['folders'].append({'path': path, 'size': size, 'tag': tag})
         
     if not devices:
         return
@@ -594,7 +600,8 @@ def print_storage_summary(min_size=MIN_SIZE_GB):
                 path_str = f['path']
                 if len(path_str) > 50:
                     path_str = "..." + path_str[-47:]
-                print(f"  - {path_str:<50} | {f_gb:>10.2f} GB")
+                tag_suffix = f" | Tag: {f['tag']}" if f['tag'] else ""
+                print(f"  - {path_str:<50} | {f_gb:>10.2f} GB{tag_suffix}")
         else:
             print(f"  - (no top-level folders >= {min_size:.2f} GB)")
     print("=" * 95)
@@ -606,70 +613,102 @@ def run_interactive(min_size=MIN_SIZE_GB):
         # Print storage usage by device
         print_storage_summary(min_size=min_size)
 
-        # Fetch all tagged folders
+        # Fetch all drilled folders (which have drilled > 0 in database)
         cur.execute(
             """
-            SELECT device_id, device_name, path, size, filecount, tag
+            SELECT device_id, device_name, path, size, filecount, tag, active
             FROM api_calls
-            WHERE endpoint = 'getProperties' AND size IS NOT NULL AND size > 0 AND tag IS NOT NULL AND tag != '' AND tag != '0'
-            ORDER BY size DESC
+            WHERE endpoint = 'getProperties' AND drilled > 0
+            ORDER BY device_name, path
+            """
+        )
+        drilled_rows = cur.fetchall()
+
+        # Fetch all tagged folders (excluding drilled folders)
+        cur.execute(
+            """
+            SELECT device_id, device_name, path, size, filecount, tag, active
+            FROM api_calls
+            WHERE endpoint = 'getProperties' AND tag IS NOT NULL AND tag != '' AND tag != '0' AND (drilled IS NULL OR drilled = 0)
+            ORDER BY device_name, size DESC
             """
         )
         tagged_rows = cur.fetchall()
 
-        # Fetch the top 10 largest untagged folders
+        # Fetch the top 10 largest untagged folders (excluding drilled folders)
         cur.execute(
             """
-            SELECT device_id, device_name, path, size, filecount, tag
+            SELECT device_id, device_name, path, size, filecount, tag, active
             FROM api_calls
-            WHERE endpoint = 'getProperties' AND size IS NOT NULL AND size > 0 AND (tag IS NULL OR tag = '' OR tag = '0')
+            WHERE endpoint = 'getProperties' AND size IS NOT NULL AND size > 0 AND (tag IS NULL OR tag = '' OR tag = '0') AND (drilled IS NULL OR drilled = 0)
             ORDER BY size DESC
             LIMIT 10
             """
         )
         untagged_rows = cur.fetchall()
         
-        rows = list(tagged_rows) + list(untagged_rows)
+        rows = list(drilled_rows) + list(tagged_rows) + list(untagged_rows)
         
         if not rows:
             print("\nNo folder size data found in the database. Please run a regular audit scan first to populate the database.")
             break
             
-        print("\n" + "=" * 95)
-        print(f"{'IDRIVE ACCOUNT STORAGE MANAGEMENT':^95}")
-        print("=" * 95)
+        print("\n" + "=" * 149)
+        print(f"{'IDRIVE ACCOUNT STORAGE MANAGEMENT':^149}")
+        print("=" * 149)
         
         current_idx = 1
         
-        if tagged_rows:
-            print(f"\n--- TAGGED FOLDERS ---")
-            print(f"{'No.':<4} | {'Device':<22} | {'Path':<45} | {'Size (GB)':>10} | {'Tag':<10}")
-            print("-" * 95)
-            for row in tagged_rows:
-                size_gb = row['size'] / (1024**3)
-                tag_str = row['tag']
+        if drilled_rows:
+            print(f"\n--- DRILLED FOLDERS ---")
+            print(f"{'No.':<4} | {'Device':<22} | {'Path':<70} | {'Size (GB)':>10} | {'Tag':<20} | {'Active':<8}")
+            print("-" * 149)
+            for row in drilled_rows:
+                size_val = row['size'] if row['size'] is not None else 0
+                size_gb = size_val / (1024**3)
+                tag_str = row['tag'] if row['tag'] else "[none]"
+                active_str = "Yes" if row['active'] else "No"
                 dev_name = row['device_name'][:22]
                 path_str = row['path']
-                if len(path_str) > 43:
-                    path_str = "..." + path_str[-40:]
-                print(f"{current_idx:<4} | {dev_name:<22} | {path_str:<45} | {size_gb:>10.2f} | {tag_str:<10}")
+                if len(path_str) > 68:
+                    path_str = "..." + path_str[-65:]
+                print(f"{current_idx:<4} | {dev_name:<22} | {path_str:<70} | {size_gb:>10.2f} | {tag_str:<20} | {active_str:<8}")
                 current_idx += 1
-            print("-" * 95)
+            print("-" * 149)
+            
+        if tagged_rows:
+            print(f"\n--- TAGGED FOLDERS ---")
+            print(f"{'No.':<4} | {'Device':<22} | {'Path':<70} | {'Size (GB)':>10} | {'Tag':<20} | {'Active':<8}")
+            print("-" * 149)
+            for row in tagged_rows:
+                size_val = row['size'] if row['size'] is not None else 0
+                size_gb = size_val / (1024**3)
+                tag_str = row['tag']
+                active_str = "Yes" if row['active'] else "No"
+                dev_name = row['device_name'][:22]
+                path_str = row['path']
+                if len(path_str) > 68:
+                    path_str = "..." + path_str[-65:]
+                print(f"{current_idx:<4} | {dev_name:<22} | {path_str:<70} | {size_gb:>10.2f} | {tag_str:<20} | {active_str:<8}")
+                current_idx += 1
+            print("-" * 149)
 
         if untagged_rows:
             print(f"\n--- UNTAGGED FOLDERS (TOP 10 BY SIZE) ---")
-            print(f"{'No.':<4} | {'Device':<22} | {'Path':<45} | {'Size (GB)':>10} | {'Tag':<10}")
-            print("-" * 95)
+            print(f"{'No.':<4} | {'Device':<22} | {'Path':<70} | {'Size (GB)':>10} | {'Tag':<20} | {'Active':<8}")
+            print("-" * 149)
             for row in untagged_rows:
-                size_gb = row['size'] / (1024**3)
+                size_val = row['size'] if row['size'] is not None else 0
+                size_gb = size_val / (1024**3)
                 tag_str = "[none]"
+                active_str = "Yes" if row['active'] else "No"
                 dev_name = row['device_name'][:22]
                 path_str = row['path']
-                if len(path_str) > 43:
-                    path_str = "..." + path_str[-40:]
-                print(f"{current_idx:<4} | {dev_name:<22} | {path_str:<45} | {size_gb:>10.2f} | {tag_str:<10}")
+                if len(path_str) > 68:
+                    path_str = "..." + path_str[-65:]
+                print(f"{current_idx:<4} | {dev_name:<22} | {path_str:<70} | {size_gb:>10.2f} | {tag_str:<20} | {active_str:<8}")
                 current_idx += 1
-            print("-" * 95)
+            print("-" * 149)
             
         print(f"Options: Enter 1-{len(rows)} to select a folder, 'r' to refresh, or 'q' to quit.")
         choice = input("Choice: ").strip().lower()
@@ -697,7 +736,7 @@ def manage_folder_interactive(row, min_size):
         # Retrieve the latest details for this path from DB
         cur.execute(
             """
-            SELECT size, filecount, tag
+            SELECT size, filecount, tag, drilled, active
             FROM api_calls
             WHERE device_id = ? AND path = ? AND endpoint = 'getProperties'
             """,
@@ -711,6 +750,8 @@ def manage_folder_interactive(row, min_size):
         size_gb = current['size'] / (1024**3)
         files = current['filecount']
         tag = current['tag'] if current['tag'] else "[none]"
+        is_drilled = current['drilled'] > 0
+        is_active = current['active'] > 0
         
         print("\n" + "-" * 80)
         print(f"Selected Folder Details:")
@@ -718,18 +759,57 @@ def manage_folder_interactive(row, min_size):
         print(f"  Path:   {path}")
         print(f"  Size:   {size_gb:.2f} GB ({files} files)")
         print(f"  Tag:    {tag}")
+        print(f"  Drilled: {'Yes' if is_drilled else 'No'}")
+        print(f"  Active:  {'Yes' if is_active else 'No'}")
         print("-" * 80)
         print("Actions:")
         print("  1. Drill Down (browse subfolders and discover sizes)")
         print("  2. Tag/Rename Tag")
-        print("  3. Clean (Permanently delete from IDrive account)")
-        print("  4. Go Back")
+        print("  3. Toggle Active status")
+        if is_drilled:
+            print("  4. Undrill (delete subfolder records and reset status)")
+            print("  5. Go Back")
+            max_act = 5
+        else:
+            print("  4. Go Back")
+            max_act = 4
         
-        act = input("Choose action (1-4): ").strip()
+        act = input(f"Choose action (1-{max_act}): ").strip()
         
-        if act == '4' or not act:
+        if not act:
             break
-        elif act == '1':
+            
+        if is_drilled:
+            if act == '5':
+                break
+            elif act == '4':
+                print(f"\nUndrilling {path} on {device_name}...")
+                norm = normalize_path(path)
+                child_pattern = norm.rstrip('/') + '/%'
+                
+                # Delete subfolder records
+                cur.execute(
+                    "DELETE FROM api_calls WHERE device_id = ? AND path LIKE ?",
+                    (device_id, child_pattern)
+                )
+                # Reset drilled flag
+                cur.execute(
+                    "UPDATE api_calls SET drilled = 0 WHERE device_id = ? AND path = ?",
+                    (device_id, norm)
+                )
+                conn.commit()
+                print("Subfolder records deleted and folder marked as not drilled.")
+                
+                # Rescan top level folder
+                print(f"Rescanning {path} size details...")
+                get_details(device_id, device_name, path, ignore_skip=True)
+                print("Rescan completed.")
+                continue
+        else:
+            if act == '4':
+                break
+                
+        if act == '1':
             print(f"\nDrilling down into {path} on {device_name}...")
             # Run crawl on the selected path with max_depth=1 (immediate children)
             # ignore_skip=True is used to bypass the 24h skip logic since this is user-triggered
@@ -740,35 +820,13 @@ def manage_folder_interactive(row, min_size):
             tag_folder(device_id, device_name, path, new_tag)
             print(f"Successfully updated tag to: {new_tag if new_tag else '[none]'}")
         elif act == '3':
-            print(f"\n[WARNING] You are about to permanently delete this folder from IDrive:")
-            print(f"  Device: {device_name}")
-            print(f"  Path:   {path}")
-            print("This action CANNOT be undone and will delete all files and subfolders in this path on IDrive.")
-            confirm = input("Type 'DELETE' to confirm deletion: ").strip()
-            if confirm == 'DELETE':
-                print(f"Sending delete request for {path} on IDrive...")
-                payload = {'p': path, 'json': 'yes', 'device_id': device_id}
-                try:
-                    r = session.post(f"{BASE_URL}/deleteFile", data=payload, timeout=20)
-                    res = r.json()
-                    if res.get('message') == 'SUCCESS' or (res.get('contents') and res['contents'][0].get('result') == 'SUCCESS'):
-                        print("SUCCESS: Folder deleted from IDrive.")
-                        # Delete from database (including all child paths)
-                        norm = normalize_path(path)
-                        child_pattern = norm.rstrip('/') + '/%'
-                        cur.execute(
-                            "DELETE FROM api_calls WHERE device_id = ? AND (path = ? OR path LIKE ?)",
-                            (device_id, norm, child_pattern)
-                        )
-                        conn.commit()
-                        print(f"Removed database records for deleted folder and its descendants.")
-                        break # Go back to main menu since folder is deleted
-                    else:
-                        print(f"ERROR: Delete failed. Response: {r.text}")
-                except Exception as e:
-                    print(f"ERROR: Delete request failed: {e}")
-            else:
-                print("Deletion cancelled.")
+            new_active = 0 if is_active else 1
+            cur.execute(
+                "UPDATE api_calls SET active = ? WHERE device_id = ? AND path = ?",
+                (new_active, device_id, path)
+            )
+            conn.commit()
+            print(f"Successfully toggled active status to: {'Yes' if new_active else 'No'}")
 
 
 def run_audit(start_folder=None, one_level=False, device_filter=None, max_depth=MAX_DEPTH, force=False, min_size=MIN_SIZE_GB):
