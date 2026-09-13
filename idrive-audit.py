@@ -747,9 +747,9 @@ def print_storage_summary(min_size=MIN_SIZE_GB, to_console=False):
         return
         
     lines = []
-    lines.append("\n" + "=" * 115)
-    lines.append(f"{'IDRIVE STORAGE USE BY DEVICE':^115}")
-    lines.append("=" * 115)
+    lines.append("\n" + "=" * 135)
+    lines.append(f"{'IDRIVE STORAGE USE BY DEVICE':^135}")
+    lines.append("=" * 135)
     
     def is_drive_root(path):
         p = path.strip('/')
@@ -802,7 +802,13 @@ def print_storage_summary(min_size=MIN_SIZE_GB, to_console=False):
         status_info = dev_status_map.get(dev_id, {'status_str': 'Online'})
         status_str = status_info['status_str']
         total_gb = ds['total_size'] / (1024**3)
-        lines.append(f"Device: {ds['name']:<22} | Status: {status_str:<7} | Total Scanned Size: {total_gb:>8.2f} GB")
+        
+        cur.execute("SELECT MAX(lmd) FROM api_calls WHERE device_id = ? AND lmd IS NOT NULL AND lmd != ''", (dev_id,))
+        max_lmd_row = cur.fetchone()
+        dev_lmd_raw = max_lmd_row[0] if (max_lmd_row and max_lmd_row[0]) else None
+        dev_lmd_str = dev_lmd_raw.replace('T', ' ')[:19] if dev_lmd_raw else "[unknown]"
+
+        lines.append(f"Device: {ds['name']:<22} | Status: {status_str:<7} | Last Mod: {dev_lmd_str:<19} | Total Scanned Size: {total_gb:>8.2f} GB")
         if ds['display_folders']:
             for f in ds['display_folders']:
                 f_gb = f['size'] / (1024**3)
@@ -833,7 +839,7 @@ def print_storage_summary(min_size=MIN_SIZE_GB, to_console=False):
                 lines.append(f"  {full_path_str:<60} | {f_gb:>10.2f} GB{drilled_str}{tag_suffix}")
         else:
             lines.append(f"  - (no folders >= {min_size:.2f} GB)")
-    lines.append("=" * 115)
+    lines.append("=" * 135)
     
     table_content = "\n".join(lines) + "\n"
     log_file = os.path.join(LOG_DIR, "idrive_storage_use_by_device.log")
@@ -982,10 +988,10 @@ def run_interactive(min_size=MIN_SIZE_GB):
                 print(f"Invalid choice. Please enter a folder number 1-{len(rows)}, or 'D' for Device Management.")
 
         elif current_view == 'device':
-            print("\n" + "=" * 115)
-            print(f"{'IDRIVE AUDIT INTERACTIVE DASHBOARD':^115}")
-            print(f"{'[S] Storage Management   |   [D] Device Management (Active)':^115}")
-            print("=" * 115)
+            print("\n" + "=" * 135)
+            print(f"{'IDRIVE AUDIT INTERACTIVE DASHBOARD':^135}")
+            print(f"{'[S] Storage Management   |   [D] Device Management (Active)':^135}")
+            print("=" * 135)
 
             status_map = get_devices_status_map()
 
@@ -1003,12 +1009,15 @@ def run_interactive(min_size=MIN_SIZE_GB):
             dev_list = sorted(status_map.items(), key=lambda x: (x[1]['online'], size_map.get(x[0], 0)), reverse=True)
 
             print(f"\n--- DEVICE MANAGEMENT ---")
-            print(f"{'No.':<4} | {'Device Name':<25} | {'Device ID':<25} | {'Status':<10} | {'Scanned Size':>12}")
-            print("-" * 115)
+            print(f"{'No.':<4} | {'Device Name':<25} | {'Device ID':<25} | {'Status':<10} | {'Last Modified':<19} | {'Scanned Size':>12}")
+            print("-" * 135)
             for idx, (d_id, d_info) in enumerate(dev_list, 1):
                 sz_gb = size_map.get(d_id, 0) / (1024**3)
-                print(f"{idx:<4} | {d_info['name']:<25} | {d_id:<25} | {d_info['status_str']:<10} | {sz_gb:>9.2f} GB")
-            print("-" * 115)
+                cur.execute("SELECT MAX(lmd) FROM api_calls WHERE device_id = ? AND lmd IS NOT NULL AND lmd != ''", (d_id,))
+                lr = cur.fetchone()
+                d_lmd = lr[0].replace('T', ' ')[:19] if (lr and lr[0]) else "[unknown]"
+                print(f"{idx:<4} | {d_info['name']:<25} | {d_id:<25} | {d_info['status_str']:<10} | {d_lmd:<19} | {sz_gb:>9.2f} GB")
+            print("-" * 135)
 
             print(f"Options: Select device (1-{len(dev_list)}) to toggle Online/Offline status, 'S' for Storage Management, 'r' to refresh, 'q' to quit.")
             choice = input("Choice: ").strip().lower()
