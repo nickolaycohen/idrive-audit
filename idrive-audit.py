@@ -838,9 +838,11 @@ def print_storage_summary(min_size=MIN_SIZE_GB, to_console=False):
 
         lines.append(f"Device: {ds['name']:<22} | Status: {status_str:<7} | Last Mod: {mod_display:<65} | Total Scanned Size: {total_gb:>8.2f} GB")
         if ds['display_folders']:
+            show_all_top = total_gb < min_size
             for f in ds['display_folders']:
                 f_gb = f['size'] / (1024**3)
-                if f_gb < min_size and not (f.get('drilled') and f['drilled'] > 0):
+                is_drilled = bool(f.get('drilled') and f['drilled'] > 0)
+                if not (f_gb >= min_size or is_drilled or show_all_top):
                     continue
 
                 depth = f['path'].count('/')
