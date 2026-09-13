@@ -3,6 +3,6 @@ idrive_audit.db
 local_audit_report.txt
 device_registry.db
 idrive_audit_report.txt
-idrive_audit_report.txt
 out.txt
-idrive_audit_report.txt
+logs/
+

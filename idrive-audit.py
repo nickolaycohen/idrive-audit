@@ -2,6 +2,7 @@ import requests
 import sys
 import json
 import argparse
+import os
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
@@ -72,10 +73,86 @@ from urllib3.util.retry import Retry
 
 
 # --- AUTH ---
-# log into idrive website; go to Developer Tools → Application → Cookies and copy the EVSID and JSESSIONID values into the COOKIE_STR below (format: "EVSID=...; JSESSIONID=...;")
-# API call is made to browseFolder endpoint - look in Headers tab -> Request Headers → Cookie to find the correct string to use here.  This is a manual step since the cookie is periodically refreshed by the server and we want to avoid hardcoding credentials in the script.
+# Attempts to load iDrive session cookies directly from your local browser cache (Chrome, Firefox, Safari, Edge, Brave).
+# If auto-extraction fails or no browser cookies are found, it falls back to MANUAL_FALLBACK_COOKIE.
 
-COOKIE_STR = "JSESSIONID=2344EDA0CB8B1DBC6903160904A881B2.tomcat8; EVSID=F9U66GWRW6F511WQMBY4394L4WUPP55011K0OTR4MWFAQ82JL8MTJ4QC1T7L; WOPI_SESSION=c9KXS213c6wZ"
+import concurrent.futures
+
+def get_idrive_cookies(target_host="evsweb2652.idrive.com", timeout=5.0):
+    """Attempt to dynamically read active iDrive session cookies from local browser cache.
+
+    Groups cookies by domain so matching EVSID/JSESSIONID pairs from the target EVS host are used.
+    """
+    def _fetch():
+        import browser_cookie3
+        for loader_name in ['chrome', 'firefox', 'safari', 'brave', 'edge']:
+            loader = getattr(browser_cookie3, loader_name, None)
+            if not loader:
+                continue
+            try:
+                cj = loader()
+                
+                by_domain = {}
+                for c in cj:
+                    dom = getattr(c, 'domain', '').lower().lstrip('.')
+                    if 'idrive.com' in dom:
+                        if dom not in by_domain:
+                            by_domain[dom] = {}
+                        if c.name in ('EVSID', 'JSESSIONID', 'WOPI_SESSION'):
+                            by_domain[dom][c.name] = c.value
+
+                if not by_domain:
+                    continue
+
+                # Search order: target host first, then subdomains by length descending
+                search_order = []
+                if target_host in by_domain:
+                    search_order.append(target_host)
+                search_order.extend(sorted([d for d in by_domain if d != target_host], key=len, reverse=True))
+
+                for dom in search_order:
+                    cmap = by_domain[dom]
+                    if 'EVSID' in cmap or 'JSESSIONID' in cmap:
+                        cookie_str = "; ".join([f"{k}={v}" for k, v in cmap.items()])
+                        print(f"[*] Loaded active iDrive session cookies automatically from browser ({loader_name} -> {dom}).")
+                        return cookie_str
+            except Exception:
+                continue
+        return None
+
+    try:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(_fetch)
+            return future.result(timeout=timeout)
+    except Exception:
+        pass
+    return None
+
+MANUAL_FALLBACK_COOKIE = ""
+
+LOG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
+os.makedirs(LOG_DIR, exist_ok=True)
+COOKIE_CACHE_FILE = os.path.join(LOG_DIR, ".idrive_cookie")
+
+def save_cookie_cache(cookie_str):
+    try:
+        with open(COOKIE_CACHE_FILE, "w", encoding="utf-8") as f:
+            f.write(cookie_str.strip())
+    except Exception:
+        pass
+
+def load_cookie_cache():
+    try:
+        if os.path.exists(COOKIE_CACHE_FILE):
+            with open(COOKIE_CACHE_FILE, "r", encoding="utf-8") as f:
+                content = f.read().strip()
+                if content:
+                    return content
+    except Exception:
+        pass
+    return None
+
+COOKIE_STR = load_cookie_cache() or get_idrive_cookies() or MANUAL_FALLBACK_COOKIE
 BASE_URL = "https://evsweb2652.idrive.com/evs"
 
 HEADERS = {
@@ -186,6 +263,23 @@ if 'active' not in cols:
     conn.commit()
 conn.commit()
 
+# Synchronize any legacy database records where size column is 0 or NULL but response_json has API size
+try:
+    cur.execute("SELECT id, response_json FROM api_calls WHERE endpoint = 'getProperties' AND (size = 0 OR size IS NULL) AND response_json IS NOT NULL")
+    sync_rows = cur.fetchall()
+    for srow in sync_rows:
+        try:
+            sdata = json.loads(srow['response_json'])
+            rsize = int(sdata.get('size', 0)) if sdata.get('size') not in (None, '-') else 0
+            rfc = int(sdata.get('filecount', 0)) if sdata.get('filecount') not in (None, '-') else 0
+            if rsize > 0:
+                cur.execute("UPDATE api_calls SET size = ?, filecount = ? WHERE id = ?", (rsize, rfc, srow['id']))
+        except Exception:
+            pass
+    conn.commit()
+except Exception:
+    pass
+
 def normalize_path(p):
     """Return a canonical path string used for DB keys (single leading slash).
 
@@ -222,8 +316,20 @@ def log_api_call(device_id, device_name, endpoint, path, details):
             except Exception:
                 lmd_val = raw_lmd  # fallback to whatever was provided
 
-    size_val = int(details.get('size', 0)) if isinstance(details, dict) else None
-    filecount_val = int(details.get('filecount', 0)) if isinstance(details, dict) else None
+    size_val = None
+    if isinstance(details, dict) and 'size' in details and details['size'] not in (None, '-'):
+        try:
+            size_val = int(details['size'])
+        except Exception:
+            size_val = 0
+
+    filecount_val = None
+    if isinstance(details, dict) and 'filecount' in details and details['filecount'] not in (None, '-'):
+        try:
+            filecount_val = int(details['filecount'])
+        except Exception:
+            filecount_val = 0
+
     # browseFolder responses may include a misleading size; we prefer to
     # trust getProperties results, so clear values for browseFolder
     if endpoint == 'browseFolder':
@@ -239,11 +345,15 @@ def log_api_call(device_id, device_name, endpoint, path, details):
     # try to find an existing row for this device/endpoint/path and update it
     try:
         cur.execute(
-            "SELECT id FROM api_calls WHERE device_id=? AND path=? AND endpoint=? ORDER BY timestamp DESC LIMIT 1",
+            "SELECT id, size, filecount FROM api_calls WHERE device_id=? AND path=? AND endpoint=? ORDER BY timestamp DESC LIMIT 1",
             (device_id, norm_path, endpoint)
         )
         existing = cur.fetchone()
         if existing:
+            # Preserve existing non-zero size if current size_val is 0 or None
+            if (size_val is None or size_val == 0) and existing['size'] and existing['size'] > 0:
+                size_val = existing['size']
+                filecount_val = existing['filecount']
             cur.execute(
                 "UPDATE api_calls SET timestamp=?, device_name=?, size=?, filecount=?, lmd=?, response_json=?, tag=? WHERE id=?",
                 (
@@ -292,29 +402,44 @@ def fetch_devices():
     Acts as cookie/authentication validation. Exits if authentication fails.
     Excludes the 'IDrive Photos' device.
     """
-    print(f"Using COOKIE_STR: {COOKIE_STR}\n")
-    try:
-        r = session.post(f"{BASE_URL}/listDevices", data={'json': 'yes'}, timeout=15)
-        data = r.json()
-        if not isinstance(data, dict) or data.get('message') != 'SUCCESS' or 'contents' not in data:
-            raise ValueError("unexpected API response format")
+    global COOKIE_STR, session
+    
+    for attempt in range(2):
+        print(f"Using COOKIE_STR: {COOKIE_STR}\n")
+        try:
+            r = session.post(f"{BASE_URL}/listDevices", data={'json': 'yes'}, timeout=15)
+            data = r.json()
+            if isinstance(data, dict) and data.get('message') == 'SUCCESS' and 'contents' in data:
+                devices = []
+                for item in data['contents']:
+                    dev_id = item.get('device_id')
+                    nick = item.get('nick_name')
+                    if dev_id and nick and nick != "IDrive Photos":
+                        devices.append({"device_id": dev_id, "nick_name": nick})
+                # Cache valid working cookie
+                save_cookie_cache(COOKIE_STR)
+                return devices
+        except Exception:
+            pass
 
-        devices = []
-        for item in data['contents']:
-            dev_id = item.get('device_id')
-            nick = item.get('nick_name')
-            if dev_id and nick:
-                # Exclude the special IDrive Photos folder since it contains duplicates
-                if nick == "IDrive Photos":
-                    continue
-                devices.append({"device_id": dev_id, "nick_name": nick})
-        return devices
-    except Exception as e:
-        sys.stdout.write("\nERROR: authentication appears to have failed.\n")
-        sys.stdout.write("Please open Chrome, navigate to idrive.com, "
-                         "copy the EVSID/JSESSIONID cookie from Developer "
-                         "Tools and update COOKIE_STR in this script.\n")
-        sys.exit(1)
+        if attempt == 0:
+            sys.stdout.write("\n[!] The current session cookie failed authentication (session expired).\n")
+            sys.stdout.write("--> Please open Chrome / browser and log into https://www.idrive.com to refresh your session.\n")
+            if sys.stdin.isatty():
+                try:
+                    user_cookie = input("--> Or paste fresh COOKIE_STR here (Press Enter to exit): ").strip()
+                    if user_cookie:
+                        COOKIE_STR = user_cookie
+                        session.headers.update({'Cookie': COOKIE_STR})
+                        continue
+                except (EOFError, KeyboardInterrupt):
+                    pass
+
+    sys.stdout.write("\nERROR: authentication appears to have failed.\n")
+    sys.stdout.write("Please open Chrome, navigate to idrive.com, "
+                     "copy the EVSID/JSESSIONID cookie from Developer "
+                     "Tools and update COOKIE_STR in this script.\n")
+    sys.exit(1)
 
 
 # Fetch device list dynamically
@@ -323,7 +448,7 @@ RAW_DEVICES = fetch_devices()
 # --- SETTINGS ---
 MAX_DEPTH = 1 # Increased depth to see deeper into /Users
 MIN_SIZE_GB = 1.0 
-OUTPUT_FILE = "idrive_audit_report.txt"
+OUTPUT_FILE = os.path.join(LOG_DIR, "idrive_audit_report.txt")
 
 class Logger(object):
     """Helper to write to both console and file."""
@@ -346,9 +471,18 @@ sys.stdout = Logger()
 def get_details(device_id, device_name, path, ignore_skip=False):
     # skip detail call if this path was checked recently
     norm = normalize_path(path)
-    # skip detail call if this path was checked recently
     if not ignore_skip and should_skip(device_id, norm, endpoint='getProperties'):
         print(f"  (skipping getProperties for {norm} on {device_name} — recent entry)")
+        try:
+            cur.execute(
+                "SELECT size, filecount, lmd FROM api_calls WHERE device_id=? AND path=? AND endpoint='getProperties' AND size > 0 ORDER BY timestamp DESC LIMIT 1",
+                (device_id, norm)
+            )
+            cached_rec = cur.fetchone()
+            if cached_rec:
+                return {"size": cached_rec['size'], "filecount": cached_rec['filecount'], "lmd": cached_rec['lmd']}
+        except Exception:
+            pass
         return {"size": 0, "filecount": 0}
 
     # try both prefix variants for compatibility, but always log using canonical path
@@ -522,12 +656,15 @@ def should_skip(device_id, path, endpoint='browseFolder', hours=24):
     return result
 
 
-def print_storage_summary(min_size=MIN_SIZE_GB):
-    """Print storage usage summarized by device and top-level folders."""
+def print_storage_summary(min_size=MIN_SIZE_GB, to_console=False):
+    """Summarize storage usage by device and top-level folders.
+    
+    Writes output table content to logs/idrive_storage_use_by_device.log instead of console by default.
+    """
     # Fetch all getProperties rows with non-zero size
     cur.execute(
         """
-        SELECT device_id, device_name, path, size, tag
+        SELECT device_id, device_name, path, size, tag, timestamp, drilled
         FROM api_calls
         WHERE endpoint = 'getProperties' AND size IS NOT NULL AND size > 0
         ORDER BY device_name, path
@@ -539,72 +676,100 @@ def print_storage_summary(min_size=MIN_SIZE_GB):
     for row in rows:
         dev_id = row['device_id']
         dev_name = row['device_name']
-        path = row['path']
-        size = row['size']
-        tag = row['tag'] if row['tag'] else ''
-        
         if dev_id not in devices:
-            devices[dev_id] = {
-                'name': dev_name,
-                'folders': []
-            }
-        devices[dev_id]['folders'].append({'path': path, 'size': size, 'tag': tag})
+            devices[dev_id] = {'name': dev_name, 'folders': {}}
+        devices[dev_id]['folders'][row['path']] = dict(row)
         
     if not devices:
         return
         
-    print("\n" + "=" * 95)
-    print(f"{'IDRIVE STORAGE USE BY DEVICE':^95}")
-    print("=" * 95)
+    lines = []
+    lines.append("\n" + "=" * 115)
+    lines.append(f"{'IDRIVE STORAGE USE BY DEVICE':^115}")
+    lines.append("=" * 115)
     
+    def is_drive_root(path):
+        p = path.strip('/')
+        return len(p) <= 1 or p.upper() in ('C', 'D', 'E', 'F', 'VOLUMES')
+
+    now = datetime.utcnow()
     dev_summaries = []
-    for dev_id, dev_info in devices.items():
+
+    for dev_id, dev_info in sorted(devices.items(), key=lambda x: x[1]['name']):
         folders = dev_info['folders']
-        # Sort folders by path length ascending so parents come before children
-        folders_sorted = sorted(folders, key=lambda x: len(x['path']))
+        folders_sorted = sorted(folders.values(), key=lambda x: len(x['path']))
         
-        top_level = []
+        top_level_paths = set()
+        display_folders = []
+        
         for f in folders_sorted:
-            is_child = False
-            for tl in top_level:
-                tl_path = tl['path']
-                if tl_path == '/':
-                    is_child = True
-                    break
-                if f['path'].startswith(tl_path + '/'):
-                    is_child = True
-                    break
+            if is_drive_root(f['path']) and len(folders_sorted) > 1:
+                continue
+            is_child = any(f['path'].startswith(tl + '/') for tl in top_level_paths)
             if not is_child:
-                top_level.append(f)
-                
-        total_size = sum(f['size'] for f in top_level)
-        
-        # Filter top-level folders by min_size
-        filtered_top = [f for f in top_level if (f['size'] / (1024**3)) >= min_size]
+                top_level_paths.add(f['path'])
+                display_folders.append(f)
+            elif f.get('drilled') and f['drilled'] > 0:
+                display_folders.append(f)
+
+        if not display_folders:
+            continue
+
+        display_folders.sort(key=lambda x: x['path'])
+        total_size = sum(f['size'] for f in display_folders if f['path'] in top_level_paths)
         
         dev_summaries.append({
             'name': dev_info['name'],
             'total_size': total_size,
-            'top_folders': sorted(filtered_top, key=lambda x: x['size'], reverse=True)
+            'display_folders': display_folders
         })
         
     dev_summaries.sort(key=lambda x: x['total_size'], reverse=True)
     
     for ds in dev_summaries:
         total_gb = ds['total_size'] / (1024**3)
-        print(f"Device: {ds['name']:<22} | Total Scanned Size: {total_gb:>8.2f} GB")
-        if ds['top_folders']:
-            for f in ds['top_folders']:
+        lines.append(f"Device: {ds['name']:<22} | Total Scanned Size: {total_gb:>8.2f} GB")
+        if ds['display_folders']:
+            for f in ds['display_folders']:
                 f_gb = f['size'] / (1024**3)
-                # truncate path if it is too long
+                if f_gb < min_size and not (f.get('drilled') and f['drilled'] > 0):
+                    continue
+
+                depth = f['path'].count('/')
+                prefix = "  " + "  " * max(0, depth - 2) + ("└─ " if depth > 2 else "- ")
                 path_str = f['path']
-                if len(path_str) > 50:
-                    path_str = "..." + path_str[-47:]
+                if len(prefix + path_str) > 60:
+                    path_str = "..." + path_str[-(57 - len(prefix)):]
+                full_path_str = f"{prefix}{path_str}"
+
+                ts_raw = f['timestamp'] if f['timestamp'] else ''
+                ts_str = ts_raw.replace('T', ' ')[:16] if ts_raw else '[never]'
+
+                stale_str = ''
+                if ts_raw:
+                    try:
+                        dt = datetime.fromisoformat(ts_raw)
+                        if (now - dt) > timedelta(days=14):
+                            stale_str = ' [Needs Refresh]'
+                    except Exception:
+                        pass
+
+                drilled_str = f" | Drilled: {ts_str}{stale_str}" if (f.get('drilled') and f['drilled'] > 0) else f" | Audited: {ts_str}"
                 tag_suffix = f" | Tag: {f['tag']}" if f['tag'] else ""
-                print(f"  - {path_str:<50} | {f_gb:>10.2f} GB{tag_suffix}")
+                lines.append(f"  {full_path_str:<60} | {f_gb:>10.2f} GB{drilled_str}{tag_suffix}")
         else:
-            print(f"  - (no top-level folders >= {min_size:.2f} GB)")
-    print("=" * 95)
+            lines.append(f"  - (no folders >= {min_size:.2f} GB)")
+    lines.append("=" * 115)
+    
+    table_content = "\n".join(lines) + "\n"
+    log_file = os.path.join(LOG_DIR, "idrive_storage_use_by_device.log")
+    with open(log_file, "w", encoding="utf-8") as f:
+        f.write(table_content)
+        
+    if to_console:
+        print(table_content)
+    else:
+        print(f"\n[*] IDRIVE STORAGE USE BY DEVICE table written to: {log_file}")
 
 
 def run_interactive(min_size=MIN_SIZE_GB):
@@ -616,7 +781,7 @@ def run_interactive(min_size=MIN_SIZE_GB):
         # Fetch all drilled folders (which have drilled > 0 in database)
         cur.execute(
             """
-            SELECT device_id, device_name, path, size, filecount, tag, active
+            SELECT device_id, device_name, path, size, filecount, tag, active, lmd
             FROM api_calls
             WHERE endpoint = 'getProperties' AND drilled > 0
             ORDER BY device_name, path
@@ -627,10 +792,10 @@ def run_interactive(min_size=MIN_SIZE_GB):
         # Fetch all tagged folders (excluding drilled folders)
         cur.execute(
             """
-            SELECT device_id, device_name, path, size, filecount, tag, active
+            SELECT device_id, device_name, path, size, filecount, tag, active, lmd
             FROM api_calls
             WHERE endpoint = 'getProperties' AND tag IS NOT NULL AND tag != '' AND tag != '0' AND (drilled IS NULL OR drilled = 0)
-            ORDER BY device_name, size DESC
+            ORDER BY active DESC, device_name, size DESC
             """
         )
         tagged_rows = cur.fetchall()
@@ -638,7 +803,7 @@ def run_interactive(min_size=MIN_SIZE_GB):
         # Fetch the top 10 largest untagged folders (excluding drilled folders)
         cur.execute(
             """
-            SELECT device_id, device_name, path, size, filecount, tag, active
+            SELECT device_id, device_name, path, size, filecount, tag, active, lmd
             FROM api_calls
             WHERE endpoint = 'getProperties' AND size IS NOT NULL AND size > 0 AND (tag IS NULL OR tag = '' OR tag = '0') AND (drilled IS NULL OR drilled = 0)
             ORDER BY size DESC
@@ -658,55 +823,62 @@ def run_interactive(min_size=MIN_SIZE_GB):
         print("=" * 149)
         
         current_idx = 1
+        header_str = f"{'No.':<4} | {'Device':<20} | {'Path':<55} | {'Size (GB)':>10} | {'Last Modified':<19} | {'Tag':<18} | {'Active':<6}"
         
         if drilled_rows:
             print(f"\n--- DRILLED FOLDERS ---")
-            print(f"{'No.':<4} | {'Device':<22} | {'Path':<70} | {'Size (GB)':>10} | {'Tag':<20} | {'Active':<8}")
+            print(header_str)
             print("-" * 149)
             for row in drilled_rows:
                 size_val = row['size'] if row['size'] is not None else 0
                 size_gb = size_val / (1024**3)
                 tag_str = row['tag'] if row['tag'] else "[none]"
                 active_str = "Yes" if row['active'] else "No"
-                dev_name = row['device_name'][:22]
+                dev_name = row['device_name'][:20]
                 path_str = row['path']
-                if len(path_str) > 68:
-                    path_str = "..." + path_str[-65:]
-                print(f"{current_idx:<4} | {dev_name:<22} | {path_str:<70} | {size_gb:>10.2f} | {tag_str:<20} | {active_str:<8}")
+                if len(path_str) > 53:
+                    path_str = "..." + path_str[-50:]
+                lmd_raw = row['lmd'] if 'lmd' in row.keys() and row['lmd'] else ''
+                lmd_str = lmd_raw.replace('T', ' ')[:19] if lmd_raw else "[unknown]"
+                print(f"{current_idx:<4} | {dev_name:<20} | {path_str:<55} | {size_gb:>10.2f} | {lmd_str:<19} | {tag_str:<18} | {active_str:<6}")
                 current_idx += 1
             print("-" * 149)
             
         if tagged_rows:
             print(f"\n--- TAGGED FOLDERS ---")
-            print(f"{'No.':<4} | {'Device':<22} | {'Path':<70} | {'Size (GB)':>10} | {'Tag':<20} | {'Active':<8}")
+            print(header_str)
             print("-" * 149)
             for row in tagged_rows:
                 size_val = row['size'] if row['size'] is not None else 0
                 size_gb = size_val / (1024**3)
                 tag_str = row['tag']
                 active_str = "Yes" if row['active'] else "No"
-                dev_name = row['device_name'][:22]
+                dev_name = row['device_name'][:20]
                 path_str = row['path']
-                if len(path_str) > 68:
-                    path_str = "..." + path_str[-65:]
-                print(f"{current_idx:<4} | {dev_name:<22} | {path_str:<70} | {size_gb:>10.2f} | {tag_str:<20} | {active_str:<8}")
+                if len(path_str) > 53:
+                    path_str = "..." + path_str[-50:]
+                lmd_raw = row['lmd'] if 'lmd' in row.keys() and row['lmd'] else ''
+                lmd_str = lmd_raw.replace('T', ' ')[:19] if lmd_raw else "[unknown]"
+                print(f"{current_idx:<4} | {dev_name:<20} | {path_str:<55} | {size_gb:>10.2f} | {lmd_str:<19} | {tag_str:<18} | {active_str:<6}")
                 current_idx += 1
             print("-" * 149)
 
         if untagged_rows:
             print(f"\n--- UNTAGGED FOLDERS (TOP 10 BY SIZE) ---")
-            print(f"{'No.':<4} | {'Device':<22} | {'Path':<70} | {'Size (GB)':>10} | {'Tag':<20} | {'Active':<8}")
+            print(header_str)
             print("-" * 149)
             for row in untagged_rows:
                 size_val = row['size'] if row['size'] is not None else 0
                 size_gb = size_val / (1024**3)
                 tag_str = "[none]"
                 active_str = "Yes" if row['active'] else "No"
-                dev_name = row['device_name'][:22]
+                dev_name = row['device_name'][:20]
                 path_str = row['path']
-                if len(path_str) > 68:
-                    path_str = "..." + path_str[-65:]
-                print(f"{current_idx:<4} | {dev_name:<22} | {path_str:<70} | {size_gb:>10.2f} | {tag_str:<20} | {active_str:<8}")
+                if len(path_str) > 53:
+                    path_str = "..." + path_str[-50:]
+                lmd_raw = row['lmd'] if 'lmd' in row.keys() and row['lmd'] else ''
+                lmd_str = lmd_raw.replace('T', ' ')[:19] if lmd_raw else "[unknown]"
+                print(f"{current_idx:<4} | {dev_name:<20} | {path_str:<55} | {size_gb:>10.2f} | {lmd_str:<19} | {tag_str:<18} | {active_str:<6}")
                 current_idx += 1
             print("-" * 149)
             
@@ -736,7 +908,7 @@ def manage_folder_interactive(row, min_size):
         # Retrieve the latest details for this path from DB
         cur.execute(
             """
-            SELECT size, filecount, tag, drilled, active
+            SELECT size, filecount, tag, drilled, active, lmd
             FROM api_calls
             WHERE device_id = ? AND path = ? AND endpoint = 'getProperties'
             """,
@@ -752,15 +924,18 @@ def manage_folder_interactive(row, min_size):
         tag = current['tag'] if current['tag'] else "[none]"
         is_drilled = current['drilled'] > 0
         is_active = current['active'] > 0
+        lmd_raw = current['lmd'] if 'lmd' in current.keys() and current['lmd'] else ''
+        lmd_str = lmd_raw.replace('T', ' ')[:19] if lmd_raw else "[unknown]"
         
         print("\n" + "-" * 80)
         print(f"Selected Folder Details:")
-        print(f"  Device: {device_name} ({device_id})")
-        print(f"  Path:   {path}")
-        print(f"  Size:   {size_gb:.2f} GB ({files} files)")
-        print(f"  Tag:    {tag}")
-        print(f"  Drilled: {'Yes' if is_drilled else 'No'}")
-        print(f"  Active:  {'Yes' if is_active else 'No'}")
+        print(f"  Device:   {device_name} ({device_id})")
+        print(f"  Path:     {path}")
+        print(f"  Size:     {size_gb:.2f} GB ({files} files)")
+        print(f"  Last Mod: {lmd_str}")
+        print(f"  Tag:      {tag}")
+        print(f"  Drilled:  {'Yes' if is_drilled else 'No'}")
+        print(f"  Active:   {'Yes' if is_active else 'No'}")
         print("-" * 80)
         print("Actions:")
         print("  1. Drill Down (browse subfolders and discover sizes)")
