@@ -1067,7 +1067,7 @@ def run_interactive(min_size=MIN_SIZE_GB):
                 print(f"{idx:<4} | {d_info['name']:<25} | {d_id:<25} | {d_info['status_str']:<10} | {mod_display:<65} | {sz_gb:>9.2f} GB")
             print("-" * 155)
 
-            print(f"Options: Select device (1-{len(dev_list)}) to toggle Online/Offline status, 'S' for Storage Management, 'r' to refresh, 'q' to quit.")
+            print(f"Options: Select device (1-{len(dev_list)}) to view options / drill down, 'S' for Storage Management, 'r' to refresh, 'q' to quit.")
             choice = input("Choice: ").strip().lower()
 
             if choice == 'q':
@@ -1084,12 +1084,78 @@ def run_interactive(min_size=MIN_SIZE_GB):
 
             if choice.isdigit() and 1 <= int(choice) <= len(dev_list):
                 sel_id, sel_info = dev_list[int(choice) - 1]
-                new_online = 0 if sel_info['online'] else 1
-                new_status_str = "Online" if new_online else "Offline"
-                set_device_status(sel_id, new_online)
-                print(f"\n[+] Set device '{sel_info['name']}' status to: {new_status_str}")
+                manage_device_interactive(sel_id, sel_info['name'], min_size)
             else:
                 print(f"Invalid choice. Please enter a device number 1-{len(dev_list)}, or 'S' for Storage Management.")
+
+
+def manage_device_interactive(device_id, device_name, min_size):
+    """Sub-menu to manage a specific selected device (drill down / audit or toggle status)."""
+    while True:
+        status_map = get_devices_status_map()
+        dev_info = status_map.get(device_id, {'name': device_name, 'online': 1, 'status_str': 'Online'})
+        
+        # Calculate total scanned size for this device from DB
+        cur.execute(
+            "SELECT SUM(size) as total_size FROM api_calls WHERE device_id = ? AND endpoint = 'getProperties' AND size IS NOT NULL AND size > 0",
+            (device_id,)
+        )
+        s_row = cur.fetchone()
+        dev_size_bytes = s_row['total_size'] if (s_row and s_row['total_size']) else 0
+        dev_size_gb = dev_size_bytes / (1024**3)
+
+        print("\n" + "-" * 80)
+        print(f"Selected Device: {dev_info['name']} ({device_id})")
+        print(f"  Status:       {dev_info['status_str']}")
+        print(f"  Scanned Size: {dev_size_gb:.2f} GB")
+        print("-" * 80)
+        print("Actions:")
+        print("  1. Drill Down / Audit Device (discover top-level folders & sizes)")
+        print(f"  2. Toggle Online/Offline status (Current: {dev_info['status_str']})")
+        print("  3. Go Back")
+        
+        act = input("Choose action (1-3): ").strip()
+        if not act or act == '3':
+            break
+        elif act == '1':
+            print(f"\nScanning / drilling top-level folders on {dev_info['name']}...")
+            # Run crawl on root "/" with min_size_gb=0.0 so all folders (even small ones) are discovered
+            crawl(device_id, dev_info['name'], "/", depth=1, max_depth=1, ignore_skip=True, min_size_gb=0.0)
+            print(f"Completed scanning {dev_info['name']}.")
+            
+            # Fetch all scanned folders for this device from DB
+            cur.execute(
+                """
+                SELECT device_id, device_name, path, size, filecount, tag, active, lmd, drilled
+                FROM api_calls
+                WHERE device_id = ? AND endpoint = 'getProperties' AND size IS NOT NULL
+                ORDER BY path
+                """,
+                (device_id,)
+            )
+            dev_folders = cur.fetchall()
+            if dev_folders:
+                print(f"\nFolders discovered on {dev_info['name']}:")
+                print(f"{'No.':<4} | {'Path':<55} | {'Size (GB)':>10} | {'Drilled':<7} | {'Tag':<15}")
+                print("-" * 100)
+                for f_idx, f_row in enumerate(dev_folders, 1):
+                    f_sz = (f_row['size'] or 0) / (1024**3)
+                    f_drilled = "Yes" if f_row['drilled'] else "No"
+                    f_tag = f_row['tag'] if f_row['tag'] else "[none]"
+                    f_path = f_row['path']
+                    if len(f_path) > 53:
+                        f_path = "..." + f_path[-50:]
+                    print(f"{f_idx:<4} | {f_path:<55} | {f_sz:>10.2f} | {f_drilled:<7} | {f_tag:<15}")
+                print("-" * 100)
+                f_choice = input(f"Select folder number (1-{len(dev_folders)}) to manage, or press Enter to return: ").strip()
+                if f_choice.isdigit() and 1 <= int(f_choice) <= len(dev_folders):
+                    selected_folder = dev_folders[int(f_choice) - 1]
+                    manage_folder_interactive(selected_folder, min_size)
+        elif act == '2':
+            new_online = 0 if dev_info['online'] else 1
+            new_status_str = "Online" if new_online else "Offline"
+            set_device_status(device_id, new_online)
+            print(f"\n[+] Set device '{dev_info['name']}' status to: {new_status_str}")
 
 
 
