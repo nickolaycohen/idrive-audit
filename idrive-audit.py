@@ -323,6 +323,10 @@ def set_device_status(device_identifier, is_online):
         (online_val, f"%{device_identifier.lower()}%", f"%{device_identifier.lower()}%")
     )
     conn.commit()
+    try:
+        print_storage_summary()
+    except Exception:
+        pass
     return cur.rowcount
 
 
@@ -680,6 +684,10 @@ def tag_folder(device_id, device_name, path, tag_value):
         )
 
     conn.commit()
+    try:
+        print_storage_summary()
+    except Exception:
+        pass
 
 
 def should_skip(device_id, path, endpoint='browseFolder', hours=24):
@@ -1122,6 +1130,10 @@ def manage_device_interactive(device_id, device_name, min_size):
             # Run crawl on root "/" with min_size_gb=0.0 so all folders (even small ones) are discovered
             crawl(device_id, dev_info['name'], "/", depth=1, max_depth=1, ignore_skip=True, min_size_gb=0.0)
             print(f"Completed scanning {dev_info['name']}.")
+            try:
+                print_storage_summary(min_size=min_size)
+            except Exception:
+                pass
             
             # Fetch all scanned folders for this device from DB
             cur.execute(
@@ -1251,10 +1263,18 @@ def manage_folder_interactive(row, min_size):
             # ignore_skip=True is used to bypass the 24h skip logic since this is user-triggered
             crawl(device_id, device_name, path, depth=1, max_depth=1, ignore_skip=True, min_size_gb=min_size)
             print("Drill down completed.")
+            try:
+                print_storage_summary(min_size=min_size)
+            except Exception:
+                pass
         elif act == '2':
             new_tag = input("Enter tag value (press Enter to clear tag): ").strip()
             tag_folder(device_id, device_name, path, new_tag)
             print(f"Successfully updated tag to: {new_tag if new_tag else '[none]'}")
+            try:
+                print_storage_summary(min_size=min_size)
+            except Exception:
+                pass
         elif act == '3':
             new_active = 0 if is_active else 1
             cur.execute(
@@ -1263,6 +1283,10 @@ def manage_folder_interactive(row, min_size):
             )
             conn.commit()
             print(f"Successfully toggled active status to: {'Yes' if new_active else 'No'}")
+            try:
+                print_storage_summary(min_size=min_size)
+            except Exception:
+                pass
 
 
 
