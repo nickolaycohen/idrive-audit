@@ -747,9 +747,9 @@ def print_storage_summary(min_size=MIN_SIZE_GB, to_console=False):
         return
         
     lines = []
-    lines.append("\n" + "=" * 135)
-    lines.append(f"{'IDRIVE STORAGE USE BY DEVICE':^135}")
-    lines.append("=" * 135)
+    lines.append("\n" + "=" * 155)
+    lines.append(f"{'IDRIVE STORAGE USE BY DEVICE':^155}")
+    lines.append("=" * 155)
     
     def is_drive_root(path):
         p = path.strip('/')
@@ -789,16 +789,24 @@ def print_storage_summary(min_size=MIN_SIZE_GB, to_console=False):
         })
         
     dev_status_map = get_devices_status_map()
-    dev_lmd_map = {}
+    dev_lmd_info = {}
     for dev_id in devices:
-        cur.execute("SELECT MAX(lmd) FROM api_calls WHERE device_id = ? AND lmd IS NOT NULL AND lmd != ''", (dev_id,))
+        cur.execute(
+            "SELECT path, lmd FROM api_calls WHERE device_id = ? AND lmd IS NOT NULL AND lmd != '' ORDER BY lmd DESC LIMIT 1",
+            (dev_id,)
+        )
         lr = cur.fetchone()
-        dev_lmd_map[dev_id] = lr[0] if (lr and lr[0]) else ""
+        if lr and lr['lmd']:
+            l_ts = lr['lmd'].replace('T', ' ')[:19]
+            l_path = lr['path']
+            dev_lmd_info[dev_id] = {'lmd': lr['lmd'], 'lmd_str': l_ts, 'path': l_path}
+        else:
+            dev_lmd_info[dev_id] = {'lmd': '', 'lmd_str': '[unknown]', 'path': ''}
 
     dev_summaries.sort(
         key=lambda x: (
             dev_status_map.get(x['id'], {}).get('online', 1),
-            dev_lmd_map.get(x['id'], ""),
+            dev_lmd_info.get(x['id'], {}).get('lmd', ''),
             x['total_size']
         ),
         reverse=True
@@ -809,10 +817,18 @@ def print_storage_summary(min_size=MIN_SIZE_GB, to_console=False):
         status_info = dev_status_map.get(dev_id, {'status_str': 'Online'})
         status_str = status_info['status_str']
         total_gb = ds['total_size'] / (1024**3)
-        dev_lmd_raw = dev_lmd_map.get(dev_id)
-        dev_lmd_str = dev_lmd_raw.replace('T', ' ')[:19] if dev_lmd_raw else "[unknown]"
+        
+        info = dev_lmd_info.get(dev_id, {'lmd_str': '[unknown]', 'path': ''})
+        l_str = info['lmd_str']
+        l_path = info['path']
+        if l_path:
+            if len(l_path) > 40:
+                l_path = "..." + l_path[-37:]
+            mod_display = f"{l_str} ({l_path})"
+        else:
+            mod_display = l_str
 
-        lines.append(f"Device: {ds['name']:<22} | Status: {status_str:<7} | Last Mod: {dev_lmd_str:<19} | Total Scanned Size: {total_gb:>8.2f} GB")
+        lines.append(f"Device: {ds['name']:<22} | Status: {status_str:<7} | Last Mod: {mod_display:<65} | Total Scanned Size: {total_gb:>8.2f} GB")
         if ds['display_folders']:
             for f in ds['display_folders']:
                 f_gb = f['size'] / (1024**3)
@@ -843,7 +859,7 @@ def print_storage_summary(min_size=MIN_SIZE_GB, to_console=False):
                 lines.append(f"  {full_path_str:<60} | {f_gb:>10.2f} GB{drilled_str}{tag_suffix}")
         else:
             lines.append(f"  - (no folders >= {min_size:.2f} GB)")
-    lines.append("=" * 135)
+    lines.append("=" * 155)
     
     table_content = "\n".join(lines) + "\n"
     log_file = os.path.join(LOG_DIR, "idrive_storage_use_by_device.log")
@@ -992,10 +1008,10 @@ def run_interactive(min_size=MIN_SIZE_GB):
                 print(f"Invalid choice. Please enter a folder number 1-{len(rows)}, or 'D' for Device Management.")
 
         elif current_view == 'device':
-            print("\n" + "=" * 135)
-            print(f"{'IDRIVE AUDIT INTERACTIVE DASHBOARD':^135}")
-            print(f"{'[S] Storage Management   |   [D] Device Management (Active)':^135}")
-            print("=" * 135)
+            print("\n" + "=" * 155)
+            print(f"{'IDRIVE AUDIT INTERACTIVE DASHBOARD':^155}")
+            print(f"{'[S] Storage Management   |   [D] Device Management (Active)':^155}")
+            print("=" * 155)
 
             status_map = get_devices_status_map()
 
@@ -1010,31 +1026,46 @@ def run_interactive(min_size=MIN_SIZE_GB):
             )
             size_map = {r['device_id']: r['total_size'] for r in cur.fetchall()}
 
-            dev_lmd_map = {}
+            dev_lmd_info = {}
             for d_id in status_map:
-                cur.execute("SELECT MAX(lmd) FROM api_calls WHERE device_id = ? AND lmd IS NOT NULL AND lmd != ''", (d_id,))
+                cur.execute(
+                    "SELECT path, lmd FROM api_calls WHERE device_id = ? AND lmd IS NOT NULL AND lmd != '' ORDER BY lmd DESC LIMIT 1",
+                    (d_id,)
+                )
                 lr = cur.fetchone()
-                dev_lmd_map[d_id] = lr[0] if (lr and lr[0]) else ""
+                if lr and lr['lmd']:
+                    l_ts = lr['lmd'].replace('T', ' ')[:19]
+                    l_path = lr['path']
+                    dev_lmd_info[d_id] = {'lmd': lr['lmd'], 'lmd_str': l_ts, 'path': l_path}
+                else:
+                    dev_lmd_info[d_id] = {'lmd': '', 'lmd_str': '[unknown]', 'path': ''}
 
             dev_list = sorted(
                 status_map.items(),
                 key=lambda x: (
                     x[1]['online'],
-                    dev_lmd_map.get(x[0], ""),
+                    dev_lmd_info.get(x[0], {}).get('lmd', ''),
                     size_map.get(x[0], 0)
                 ),
                 reverse=True
             )
 
             print(f"\n--- DEVICE MANAGEMENT ---")
-            print(f"{'No.':<4} | {'Device Name':<25} | {'Device ID':<25} | {'Status':<10} | {'Last Modified':<19} | {'Scanned Size':>12}")
-            print("-" * 135)
+            print(f"{'No.':<4} | {'Device Name':<25} | {'Device ID':<25} | {'Status':<10} | {'Last Modified (Folder)':<65} | {'Scanned Size':>12}")
+            print("-" * 155)
             for idx, (d_id, d_info) in enumerate(dev_list, 1):
                 sz_gb = size_map.get(d_id, 0) / (1024**3)
-                d_lmd_raw = dev_lmd_map.get(d_id)
-                d_lmd = d_lmd_raw.replace('T', ' ')[:19] if d_lmd_raw else "[unknown]"
-                print(f"{idx:<4} | {d_info['name']:<25} | {d_id:<25} | {d_info['status_str']:<10} | {d_lmd:<19} | {sz_gb:>9.2f} GB")
-            print("-" * 135)
+                info = dev_lmd_info.get(d_id, {'lmd_str': '[unknown]', 'path': ''})
+                l_str = info['lmd_str']
+                l_path = info['path']
+                if l_path:
+                    if len(l_path) > 40:
+                        l_path = "..." + l_path[-37:]
+                    mod_display = f"{l_str} ({l_path})"
+                else:
+                    mod_display = l_str
+                print(f"{idx:<4} | {d_info['name']:<25} | {d_id:<25} | {d_info['status_str']:<10} | {mod_display:<65} | {sz_gb:>9.2f} GB")
+            print("-" * 155)
 
             print(f"Options: Select device (1-{len(dev_list)}) to toggle Online/Offline status, 'S' for Storage Management, 'r' to refresh, 'q' to quit.")
             choice = input("Choice: ").strip().lower()
