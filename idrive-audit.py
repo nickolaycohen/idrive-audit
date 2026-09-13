@@ -263,6 +263,69 @@ if 'active' not in cols:
     conn.commit()
 conn.commit()
 
+# --- DEVICE ONLINE/OFFLINE TABLE AND HELPERS ---
+cur.execute(
+    '''
+    CREATE TABLE IF NOT EXISTS devices (
+        device_id TEXT PRIMARY KEY,
+        device_name TEXT,
+        online INTEGER DEFAULT 1
+    )
+    '''
+)
+conn.commit()
+
+def sync_devices_table(raw_devices=None):
+    """Ensure all known devices from RAW_DEVICES and api_calls exist in devices table.
+    Default new devices to online = 1 (Online).
+    """
+    if raw_devices:
+        for dev in raw_devices:
+            dev_id = dev.get('device_id')
+            dev_name = dev.get('nick_name')
+            if dev_id:
+                cur.execute("SELECT device_id FROM devices WHERE device_id = ?", (dev_id,))
+                if not cur.fetchone():
+                    cur.execute("INSERT INTO devices (device_id, device_name, online) VALUES (?, ?, 1)", (dev_id, dev_name))
+                else:
+                    cur.execute("UPDATE devices SET device_name = ? WHERE device_id = ?", (dev_name, dev_id))
+    
+    # Also sync any unique device_ids from api_calls that might be historical
+    cur.execute("SELECT DISTINCT device_id, device_name FROM api_calls WHERE device_id IS NOT NULL AND device_id != ''")
+    api_devs = cur.fetchall()
+    for row in api_devs:
+        dev_id = row['device_id']
+        dev_name = row['device_name'] or dev_id
+        cur.execute("SELECT device_id FROM devices WHERE device_id = ?", (dev_id,))
+        if not cur.fetchone():
+            cur.execute("INSERT INTO devices (device_id, device_name, online) VALUES (?, ?, 1)", (dev_id, dev_name))
+    conn.commit()
+
+def get_devices_status_map():
+    sync_devices_table(RAW_DEVICES if 'RAW_DEVICES' in globals() else None)
+    cur.execute("SELECT device_id, device_name, online FROM devices")
+    rows = cur.fetchall()
+    res = {}
+    for r in rows:
+        res[r['device_id']] = {
+            'name': r['device_name'],
+            'online': r['online'],
+            'status_str': 'Online' if r['online'] else 'Offline'
+        }
+    return res
+
+def set_device_status(device_identifier, is_online):
+    """Update device online status by device_id or device_name substring."""
+    sync_devices_table(RAW_DEVICES if 'RAW_DEVICES' in globals() else None)
+    online_val = 1 if is_online else 0
+    cur.execute(
+        "UPDATE devices SET online = ? WHERE LOWER(device_id) LIKE ? OR LOWER(device_name) LIKE ?",
+        (online_val, f"%{device_identifier.lower()}%", f"%{device_identifier.lower()}%")
+    )
+    conn.commit()
+    return cur.rowcount
+
+
 # Synchronize any legacy database records where size column is 0 or NULL but response_json has API size
 try:
     cur.execute("SELECT id, response_json FROM api_calls WHERE endpoint = 'getProperties' AND (size = 0 OR size IS NULL) AND response_json IS NOT NULL")
@@ -719,6 +782,7 @@ def print_storage_summary(min_size=MIN_SIZE_GB, to_console=False):
         total_size = sum(f['size'] for f in display_folders if f['path'] in top_level_paths)
         
         dev_summaries.append({
+            'id': dev_id,
             'name': dev_info['name'],
             'total_size': total_size,
             'display_folders': display_folders
@@ -726,9 +790,13 @@ def print_storage_summary(min_size=MIN_SIZE_GB, to_console=False):
         
     dev_summaries.sort(key=lambda x: x['total_size'], reverse=True)
     
+    dev_status_map = get_devices_status_map()
     for ds in dev_summaries:
+        dev_id = ds['id']
+        status_info = dev_status_map.get(dev_id, {'status_str': 'Online'})
+        status_str = status_info['status_str']
         total_gb = ds['total_size'] / (1024**3)
-        lines.append(f"Device: {ds['name']:<22} | Total Scanned Size: {total_gb:>8.2f} GB")
+        lines.append(f"Device: {ds['name']:<22} | Status: {status_str:<7} | Total Scanned Size: {total_gb:>8.2f} GB")
         if ds['display_folders']:
             for f in ds['display_folders']:
                 f_gb = f['size'] / (1024**3)
@@ -882,13 +950,16 @@ def run_interactive(min_size=MIN_SIZE_GB):
                 current_idx += 1
             print("-" * 149)
             
-        print(f"Options: Enter 1-{len(rows)} to select a folder, 'r' to refresh, or 'q' to quit.")
+        print(f"Options: Enter 1-{len(rows)} to select a folder, 'd' to manage devices (Online/Offline), 'r' to refresh, or 'q' to quit.")
         choice = input("Choice: ").strip().lower()
         
         if choice == 'q':
             print("Exiting interactive session.")
             break
         elif choice == 'r':
+            continue
+        elif choice == 'd':
+            manage_devices_interactive()
             continue
             
         if not choice.isdigit() or not (1 <= int(choice) <= len(rows)):
@@ -1004,6 +1075,37 @@ def manage_folder_interactive(row, min_size):
             print(f"Successfully toggled active status to: {'Yes' if new_active else 'No'}")
 
 
+def manage_devices_interactive():
+    """Interactive menu to view and toggle device Online/Offline status."""
+    while True:
+        status_map = get_devices_status_map()
+        dev_list = sorted(status_map.items(), key=lambda x: x[1]['name'])
+        if not dev_list:
+            print("\nNo devices found.")
+            break
+        
+        print("\n" + "=" * 85)
+        print(f"{'DEVICE STATUS MANAGEMENT':^85}")
+        print("=" * 85)
+        print(f"{'No.':<4} | {'Device Name':<30} | {'Device ID':<30} | {'Status':<10}")
+        print("-" * 85)
+        for idx, (d_id, d_info) in enumerate(dev_list, 1):
+            print(f"{idx:<4} | {d_info['name']:<30} | {d_id:<30} | {d_info['status_str']:<10}")
+        print("-" * 85)
+        print(f"Enter 1-{len(dev_list)} to toggle device status (Online/Offline), or press Enter / 'b' to go back.")
+        choice = input("Choice: ").strip().lower()
+        if not choice or choice == 'b':
+            break
+        if choice.isdigit() and 1 <= int(choice) <= len(dev_list):
+            sel_id, sel_info = dev_list[int(choice) - 1]
+            new_online = 0 if sel_info['online'] else 1
+            new_status_str = "Online" if new_online else "Offline"
+            set_device_status(sel_id, new_online)
+            print(f"\n[+] Set device '{sel_info['name']}' status to: {new_status_str}")
+        else:
+            print(f"Invalid choice. Please enter a number between 1 and {len(dev_list)}.")
+
+
 def run_audit(start_folder=None, one_level=False, device_filter=None, max_depth=MAX_DEPTH, force=False, min_size=MIN_SIZE_GB):
     """Perform the audit.
 
@@ -1072,8 +1174,29 @@ if __name__ == "__main__":
     parser.add_argument("--list-tags", action="store_true",
                         help="Print all tagged paths for matching device")
 
+    # device online status operations
+    parser.add_argument("--set-device-online", help="Set device to Online by ID or Name")
+    parser.add_argument("--set-device-offline", help="Set device to Offline by ID or Name")
+    parser.add_argument("--list-devices", action="store_true", help="List all devices and their Online/Offline status")
+
     args = parser.parse_args()
     print(f"Parsed parameters: {args}")
+
+    # handle device online status operations before interactive/crawl
+    if args.set_device_online or args.set_device_offline or args.list_devices:
+        if args.set_device_online:
+            count = set_device_status(args.set_device_online, True)
+            print(f"Updated {count} device(s) to Online.")
+        if args.set_device_offline:
+            count = set_device_status(args.set_device_offline, False)
+            print(f"Updated {count} device(s) to Offline.")
+        if args.list_devices:
+            st_map = get_devices_status_map()
+            print("\nDevice List & Online Status:")
+            for d_id, d_info in sorted(st_map.items(), key=lambda x: x[1]['name']):
+                print(f"  - {d_info['name']:<30} ({d_id}): {d_info['status_str']}")
+        conn.close()
+        sys.exit(0)
 
     # handle interactive session request
     if args.interactive:

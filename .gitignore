@@ -5,4 +5,5 @@ device_registry.db
 idrive_audit_report.txt
 out.txt
 logs/
+__pycache__/
 
