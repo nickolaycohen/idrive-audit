@@ -788,9 +788,15 @@ def print_storage_summary(min_size=MIN_SIZE_GB, to_console=False):
             'display_folders': display_folders
         })
         
-    dev_summaries.sort(key=lambda x: x['total_size'], reverse=True)
-    
     dev_status_map = get_devices_status_map()
+    dev_summaries.sort(
+        key=lambda x: (
+            dev_status_map.get(x['id'], {}).get('online', 1),
+            x['total_size']
+        ),
+        reverse=True
+    )
+    
     for ds in dev_summaries:
         dev_id = ds['id']
         status_info = dev_status_map.get(dev_id, {'status_str': 'Online'})
@@ -994,7 +1000,7 @@ def run_interactive(min_size=MIN_SIZE_GB):
             )
             size_map = {r['device_id']: r['total_size'] for r in cur.fetchall()}
 
-            dev_list = sorted(status_map.items(), key=lambda x: size_map.get(x[0], 0), reverse=True)
+            dev_list = sorted(status_map.items(), key=lambda x: (x[1]['online'], size_map.get(x[0], 0)), reverse=True)
 
             print(f"\n--- DEVICE MANAGEMENT ---")
             print(f"{'No.':<4} | {'Device Name':<25} | {'Device ID':<25} | {'Status':<10} | {'Scanned Size':>12}")
