@@ -841,133 +841,193 @@ def print_storage_summary(min_size=MIN_SIZE_GB, to_console=False):
 
 
 def run_interactive(min_size=MIN_SIZE_GB):
-    """Run an interactive console loop to manage top folders, showing tagged folders at the top."""
+    """Run interactive loop supporting Storage Management (default) and Device Management modes."""
+    current_view = 'storage'
+
     while True:
-        # Print storage usage by device
-        print_storage_summary(min_size=min_size)
+        if current_view == 'storage':
+            print("\n" + "=" * 149)
+            print(f"{'IDRIVE AUDIT INTERACTIVE DASHBOARD':^149}")
+            print(f"{'[1] Storage Management (Active)   |   [2] Device Management':^149}")
+            print("=" * 149)
 
-        # Fetch all drilled folders (which have drilled > 0 in database)
-        cur.execute(
-            """
-            SELECT device_id, device_name, path, size, filecount, tag, active, lmd
-            FROM api_calls
-            WHERE endpoint = 'getProperties' AND drilled > 0
-            ORDER BY device_name, path
-            """
-        )
-        drilled_rows = cur.fetchall()
+            # Print storage usage by device
+            print_storage_summary(min_size=min_size)
 
-        # Fetch all tagged folders (excluding drilled folders)
-        cur.execute(
-            """
-            SELECT device_id, device_name, path, size, filecount, tag, active, lmd
-            FROM api_calls
-            WHERE endpoint = 'getProperties' AND tag IS NOT NULL AND tag != '' AND tag != '0' AND (drilled IS NULL OR drilled = 0)
-            ORDER BY active DESC, device_name, size DESC
-            """
-        )
-        tagged_rows = cur.fetchall()
+            # Fetch all drilled folders (which have drilled > 0 in database)
+            cur.execute(
+                """
+                SELECT device_id, device_name, path, size, filecount, tag, active, lmd
+                FROM api_calls
+                WHERE endpoint = 'getProperties' AND drilled > 0
+                ORDER BY device_name, path
+                """
+            )
+            drilled_rows = cur.fetchall()
 
-        # Fetch the top 10 largest untagged folders (excluding drilled folders)
-        cur.execute(
-            """
-            SELECT device_id, device_name, path, size, filecount, tag, active, lmd
-            FROM api_calls
-            WHERE endpoint = 'getProperties' AND size IS NOT NULL AND size > 0 AND (tag IS NULL OR tag = '' OR tag = '0') AND (drilled IS NULL OR drilled = 0)
-            ORDER BY size DESC
-            LIMIT 10
-            """
-        )
-        untagged_rows = cur.fetchall()
-        
-        rows = list(drilled_rows) + list(tagged_rows) + list(untagged_rows)
-        
-        if not rows:
-            print("\nNo folder size data found in the database. Please run a regular audit scan first to populate the database.")
-            break
-            
-        print("\n" + "=" * 149)
-        print(f"{'IDRIVE ACCOUNT STORAGE MANAGEMENT':^149}")
-        print("=" * 149)
-        
-        current_idx = 1
-        header_str = f"{'No.':<4} | {'Device':<20} | {'Path':<55} | {'Size (GB)':>10} | {'Last Modified':<19} | {'Tag':<18} | {'Active':<6}"
-        
-        if drilled_rows:
-            print(f"\n--- DRILLED FOLDERS ---")
-            print(header_str)
-            print("-" * 149)
-            for row in drilled_rows:
-                size_val = row['size'] if row['size'] is not None else 0
-                size_gb = size_val / (1024**3)
-                tag_str = row['tag'] if row['tag'] else "[none]"
-                active_str = "Yes" if row['active'] else "No"
-                dev_name = row['device_name'][:20]
-                path_str = row['path']
-                if len(path_str) > 53:
-                    path_str = "..." + path_str[-50:]
-                lmd_raw = row['lmd'] if 'lmd' in row.keys() and row['lmd'] else ''
-                lmd_str = lmd_raw.replace('T', ' ')[:19] if lmd_raw else "[unknown]"
-                print(f"{current_idx:<4} | {dev_name:<20} | {path_str:<55} | {size_gb:>10.2f} | {lmd_str:<19} | {tag_str:<18} | {active_str:<6}")
-                current_idx += 1
-            print("-" * 149)
-            
-        if tagged_rows:
-            print(f"\n--- TAGGED FOLDERS ---")
-            print(header_str)
-            print("-" * 149)
-            for row in tagged_rows:
-                size_val = row['size'] if row['size'] is not None else 0
-                size_gb = size_val / (1024**3)
-                tag_str = row['tag']
-                active_str = "Yes" if row['active'] else "No"
-                dev_name = row['device_name'][:20]
-                path_str = row['path']
-                if len(path_str) > 53:
-                    path_str = "..." + path_str[-50:]
-                lmd_raw = row['lmd'] if 'lmd' in row.keys() and row['lmd'] else ''
-                lmd_str = lmd_raw.replace('T', ' ')[:19] if lmd_raw else "[unknown]"
-                print(f"{current_idx:<4} | {dev_name:<20} | {path_str:<55} | {size_gb:>10.2f} | {lmd_str:<19} | {tag_str:<18} | {active_str:<6}")
-                current_idx += 1
-            print("-" * 149)
+            # Fetch all tagged folders (excluding drilled folders)
+            cur.execute(
+                """
+                SELECT device_id, device_name, path, size, filecount, tag, active, lmd
+                FROM api_calls
+                WHERE endpoint = 'getProperties' AND tag IS NOT NULL AND tag != '' AND tag != '0' AND (drilled IS NULL OR drilled = 0)
+                ORDER BY active DESC, device_name, size DESC
+                """
+            )
+            tagged_rows = cur.fetchall()
 
-        if untagged_rows:
-            print(f"\n--- UNTAGGED FOLDERS (TOP 10 BY SIZE) ---")
-            print(header_str)
-            print("-" * 149)
-            for row in untagged_rows:
-                size_val = row['size'] if row['size'] is not None else 0
-                size_gb = size_val / (1024**3)
-                tag_str = "[none]"
-                active_str = "Yes" if row['active'] else "No"
-                dev_name = row['device_name'][:20]
-                path_str = row['path']
-                if len(path_str) > 53:
-                    path_str = "..." + path_str[-50:]
-                lmd_raw = row['lmd'] if 'lmd' in row.keys() and row['lmd'] else ''
-                lmd_str = lmd_raw.replace('T', ' ')[:19] if lmd_raw else "[unknown]"
-                print(f"{current_idx:<4} | {dev_name:<20} | {path_str:<55} | {size_gb:>10.2f} | {lmd_str:<19} | {tag_str:<18} | {active_str:<6}")
-                current_idx += 1
-            print("-" * 149)
-            
-        print(f"Options: Enter 1-{len(rows)} to select a folder, 'd' to manage devices (Online/Offline), 'r' to refresh, or 'q' to quit.")
-        choice = input("Choice: ").strip().lower()
-        
-        if choice == 'q':
-            print("Exiting interactive session.")
-            break
-        elif choice == 'r':
-            continue
-        elif choice == 'd':
-            manage_devices_interactive()
-            continue
-            
-        if not choice.isdigit() or not (1 <= int(choice) <= len(rows)):
-            print(f"Invalid choice. Please enter a number between 1 and {len(rows)}.")
-            continue
-            
-        selected_row = rows[int(choice) - 1]
-        manage_folder_interactive(selected_row, min_size)
+            # Fetch the top 10 largest untagged folders (excluding drilled folders)
+            cur.execute(
+                """
+                SELECT device_id, device_name, path, size, filecount, tag, active, lmd
+                FROM api_calls
+                WHERE endpoint = 'getProperties' AND size IS NOT NULL AND size > 0 AND (tag IS NULL OR tag = '' OR tag = '0') AND (drilled IS NULL OR drilled = 0)
+                ORDER BY size DESC
+                LIMIT 10
+                """
+            )
+            untagged_rows = cur.fetchall()
+
+            rows = list(drilled_rows) + list(tagged_rows) + list(untagged_rows)
+
+            print("\n" + "=" * 149)
+            print(f"{'IDRIVE ACCOUNT STORAGE MANAGEMENT':^149}")
+            print("=" * 149)
+
+            current_idx = 1
+            header_str = f"{'No.':<4} | {'Device':<20} | {'Path':<55} | {'Size (GB)':>10} | {'Last Modified':<19} | {'Tag':<18} | {'Active':<6}"
+
+            if drilled_rows:
+                print(f"\n--- DRILLED FOLDERS ---")
+                print(header_str)
+                print("-" * 149)
+                for row in drilled_rows:
+                    size_val = row['size'] if row['size'] is not None else 0
+                    size_gb = size_val / (1024**3)
+                    tag_str = row['tag'] if row['tag'] else "[none]"
+                    active_str = "Yes" if row['active'] else "No"
+                    dev_name = row['device_name'][:20]
+                    path_str = row['path']
+                    if len(path_str) > 53:
+                        path_str = "..." + path_str[-50:]
+                    lmd_raw = row['lmd'] if 'lmd' in row.keys() and row['lmd'] else ''
+                    lmd_str = lmd_raw.replace('T', ' ')[:19] if lmd_raw else "[unknown]"
+                    print(f"{current_idx:<4} | {dev_name:<20} | {path_str:<55} | {size_gb:>10.2f} | {lmd_str:<19} | {tag_str:<18} | {active_str:<6}")
+                    current_idx += 1
+                print("-" * 149)
+
+            if tagged_rows:
+                print(f"\n--- TAGGED FOLDERS ---")
+                print(header_str)
+                print("-" * 149)
+                for row in tagged_rows:
+                    size_val = row['size'] if row['size'] is not None else 0
+                    size_gb = size_val / (1024**3)
+                    tag_str = row['tag']
+                    active_str = "Yes" if row['active'] else "No"
+                    dev_name = row['device_name'][:20]
+                    path_str = row['path']
+                    if len(path_str) > 53:
+                        path_str = "..." + path_str[-50:]
+                    lmd_raw = row['lmd'] if 'lmd' in row.keys() and row['lmd'] else ''
+                    lmd_str = lmd_raw.replace('T', ' ')[:19] if lmd_raw else "[unknown]"
+                    print(f"{current_idx:<4} | {dev_name:<20} | {path_str:<55} | {size_gb:>10.2f} | {lmd_str:<19} | {tag_str:<18} | {active_str:<6}")
+                    current_idx += 1
+                print("-" * 149)
+
+            if untagged_rows:
+                print(f"\n--- UNTAGGED FOLDERS (TOP 10 BY SIZE) ---")
+                print(header_str)
+                print("-" * 149)
+                for row in untagged_rows:
+                    size_val = row['size'] if row['size'] is not None else 0
+                    size_gb = size_val / (1024**3)
+                    tag_str = "[none]"
+                    active_str = "Yes" if row['active'] else "No"
+                    dev_name = row['device_name'][:20]
+                    path_str = row['path']
+                    if len(path_str) > 53:
+                        path_str = "..." + path_str[-50:]
+                    lmd_raw = row['lmd'] if 'lmd' in row.keys() and row['lmd'] else ''
+                    lmd_str = lmd_raw.replace('T', ' ')[:19] if lmd_raw else "[unknown]"
+                    print(f"{current_idx:<4} | {dev_name:<20} | {path_str:<55} | {size_gb:>10.2f} | {lmd_str:<19} | {tag_str:<18} | {active_str:<6}")
+                    current_idx += 1
+                print("-" * 149)
+
+            print(f"Options: Select folder (1-{len(rows)}), switch view ('2' for Device Management), 'r' to refresh, 'q' to quit.")
+            choice = input("Choice: ").strip().lower()
+
+            if choice == 'q':
+                print("Exiting interactive session.")
+                break
+            elif choice == 'r':
+                continue
+            elif choice in ('2', 'd', 'dm', 'device'):
+                current_view = 'device'
+                continue
+            elif choice == '1' or choice in ('s', 'sm', 'storage'):
+                current_view = 'storage'
+                continue
+
+            if choice.isdigit() and 1 <= int(choice) <= len(rows):
+                selected_row = rows[int(choice) - 1]
+                manage_folder_interactive(selected_row, min_size)
+            else:
+                print(f"Invalid choice. Please enter a folder number 1-{len(rows)}, or '2' for Device Management.")
+
+        elif current_view == 'device':
+            print("\n" + "=" * 115)
+            print(f"{'IDRIVE AUDIT INTERACTIVE DASHBOARD':^115}")
+            print(f"{'[1] Storage Management   |   [2] Device Management (Active)':^115}")
+            print("=" * 115)
+
+            status_map = get_devices_status_map()
+
+            # Compute total scanned size per device from DB
+            cur.execute(
+                """
+                SELECT device_id, SUM(size) as total_size
+                FROM api_calls
+                WHERE endpoint = 'getProperties' AND size IS NOT NULL AND size > 0
+                GROUP BY device_id
+                """
+            )
+            size_map = {r['device_id']: r['total_size'] for r in cur.fetchall()}
+
+            dev_list = sorted(status_map.items(), key=lambda x: size_map.get(x[0], 0), reverse=True)
+
+            print(f"\n--- DEVICE MANAGEMENT ---")
+            print(f"{'No.':<4} | {'Device Name':<25} | {'Device ID':<25} | {'Status':<10} | {'Scanned Size':>12}")
+            print("-" * 115)
+            for idx, (d_id, d_info) in enumerate(dev_list, 1):
+                sz_gb = size_map.get(d_id, 0) / (1024**3)
+                print(f"{idx:<4} | {d_info['name']:<25} | {d_id:<25} | {d_info['status_str']:<10} | {sz_gb:>9.2f} GB")
+            print("-" * 115)
+
+            print(f"Options: Select device (1-{len(dev_list)}) to toggle Online/Offline status, switch view ('1' for Storage Management), 'r' to refresh, 'q' to quit.")
+            choice = input("Choice: ").strip().lower()
+
+            if choice == 'q':
+                print("Exiting interactive session.")
+                break
+            elif choice == 'r':
+                continue
+            elif choice in ('1', 's', 'sm', 'storage'):
+                current_view = 'storage'
+                continue
+            elif choice == '2' or choice in ('d', 'dm', 'device'):
+                current_view = 'device'
+                continue
+
+            if choice.isdigit() and 1 <= int(choice) <= len(dev_list):
+                sel_id, sel_info = dev_list[int(choice) - 1]
+                new_online = 0 if sel_info['online'] else 1
+                new_status_str = "Online" if new_online else "Offline"
+                set_device_status(sel_id, new_online)
+                print(f"\n[+] Set device '{sel_info['name']}' status to: {new_status_str}")
+            else:
+                print(f"Invalid choice. Please enter a device number 1-{len(dev_list)}, or '1' for Storage Management.")
+
 
 def manage_folder_interactive(row, min_size):
     """Sub-menu to manage a specific selected folder."""
@@ -1073,6 +1133,7 @@ def manage_folder_interactive(row, min_size):
             )
             conn.commit()
             print(f"Successfully toggled active status to: {'Yes' if new_active else 'No'}")
+
 
 
 def manage_devices_interactive():
