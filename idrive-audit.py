@@ -848,7 +848,7 @@ def run_interactive(min_size=MIN_SIZE_GB):
         if current_view == 'storage':
             print("\n" + "=" * 149)
             print(f"{'IDRIVE AUDIT INTERACTIVE DASHBOARD':^149}")
-            print(f"{'[1] Storage Management (Active)   |   [2] Device Management':^149}")
+            print(f"{'[S] Storage Management (Active)   |   [D] Device Management':^149}")
             print("=" * 149)
 
             # Print storage usage by device
@@ -954,7 +954,7 @@ def run_interactive(min_size=MIN_SIZE_GB):
                     current_idx += 1
                 print("-" * 149)
 
-            print(f"Options: Select folder (1-{len(rows)}), switch view ('2' for Device Management), 'r' to refresh, 'q' to quit.")
+            print(f"Options: Select folder (1-{len(rows)}), 'D' for Device Management, 'r' to refresh, 'q' to quit.")
             choice = input("Choice: ").strip().lower()
 
             if choice == 'q':
@@ -962,10 +962,10 @@ def run_interactive(min_size=MIN_SIZE_GB):
                 break
             elif choice == 'r':
                 continue
-            elif choice in ('2', 'd', 'dm', 'device'):
+            elif choice in ('d', 'dm', 'device'):
                 current_view = 'device'
                 continue
-            elif choice == '1' or choice in ('s', 'sm', 'storage'):
+            elif choice in ('s', 'sm', 'storage'):
                 current_view = 'storage'
                 continue
 
@@ -973,12 +973,12 @@ def run_interactive(min_size=MIN_SIZE_GB):
                 selected_row = rows[int(choice) - 1]
                 manage_folder_interactive(selected_row, min_size)
             else:
-                print(f"Invalid choice. Please enter a folder number 1-{len(rows)}, or '2' for Device Management.")
+                print(f"Invalid choice. Please enter a folder number 1-{len(rows)}, or 'D' for Device Management.")
 
         elif current_view == 'device':
             print("\n" + "=" * 115)
             print(f"{'IDRIVE AUDIT INTERACTIVE DASHBOARD':^115}")
-            print(f"{'[1] Storage Management   |   [2] Device Management (Active)':^115}")
+            print(f"{'[S] Storage Management   |   [D] Device Management (Active)':^115}")
             print("=" * 115)
 
             status_map = get_devices_status_map()
@@ -1004,7 +1004,7 @@ def run_interactive(min_size=MIN_SIZE_GB):
                 print(f"{idx:<4} | {d_info['name']:<25} | {d_id:<25} | {d_info['status_str']:<10} | {sz_gb:>9.2f} GB")
             print("-" * 115)
 
-            print(f"Options: Select device (1-{len(dev_list)}) to toggle Online/Offline status, switch view ('1' for Storage Management), 'r' to refresh, 'q' to quit.")
+            print(f"Options: Select device (1-{len(dev_list)}) to toggle Online/Offline status, 'S' for Storage Management, 'r' to refresh, 'q' to quit.")
             choice = input("Choice: ").strip().lower()
 
             if choice == 'q':
@@ -1012,10 +1012,10 @@ def run_interactive(min_size=MIN_SIZE_GB):
                 break
             elif choice == 'r':
                 continue
-            elif choice in ('1', 's', 'sm', 'storage'):
+            elif choice in ('s', 'sm', 'storage'):
                 current_view = 'storage'
                 continue
-            elif choice == '2' or choice in ('d', 'dm', 'device'):
+            elif choice in ('d', 'dm', 'device'):
                 current_view = 'device'
                 continue
 
@@ -1026,7 +1026,8 @@ def run_interactive(min_size=MIN_SIZE_GB):
                 set_device_status(sel_id, new_online)
                 print(f"\n[+] Set device '{sel_info['name']}' status to: {new_status_str}")
             else:
-                print(f"Invalid choice. Please enter a device number 1-{len(dev_list)}, or '1' for Storage Management.")
+                print(f"Invalid choice. Please enter a device number 1-{len(dev_list)}, or 'S' for Storage Management.")
+
 
 
 def manage_folder_interactive(row, min_size):
