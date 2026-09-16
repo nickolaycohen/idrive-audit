@@ -1028,18 +1028,22 @@ def run_interactive(min_size=MIN_SIZE_GB):
                     current_idx += 1
                 print("-" * 149)
 
-            print(f"Options: Select folder (1-{len(rows)}), 'D' for Device Management, 'r' to refresh, 'q' to quit.")
-            choice = input("Choice: ").strip().lower()
+            print(f"Options: Select folder (1-{len(rows)}), enter path or keyword search (e.g. '/Pictures'), 'D' for Device Management, 'r' to refresh, 'q' to quit.")
+            choice = input("Choice: ").strip()
 
-            if choice == 'q':
+            if not choice:
+                continue
+
+            c_lower = choice.lower()
+            if c_lower == 'q':
                 print("Exiting interactive session.")
                 break
-            elif choice == 'r':
+            elif c_lower == 'r':
                 continue
-            elif choice in ('d', 'dm', 'device'):
+            elif c_lower in ('d', 'dm', 'device'):
                 current_view = 'device'
                 continue
-            elif choice in ('s', 'sm', 'storage'):
+            elif c_lower in ('s', 'sm', 'storage'):
                 current_view = 'storage'
                 continue
 
@@ -1047,7 +1051,36 @@ def run_interactive(min_size=MIN_SIZE_GB):
                 selected_row = rows[int(choice) - 1]
                 manage_folder_interactive(selected_row, min_size)
             else:
-                print(f"Invalid choice. Please enter a folder number 1-{len(rows)}, or 'D' for Device Management.")
+                # Search database for matching folder path
+                cur.execute(
+                    """
+                    SELECT device_id, device_name, path, size, filecount, tag, active, lmd, drilled
+                    FROM api_calls
+                    WHERE endpoint = 'getProperties' AND LOWER(path) LIKE ?
+                    ORDER BY size DESC
+                    """,
+                    (f"%{c_lower}%",)
+                )
+                search_matches = cur.fetchall()
+                if len(search_matches) == 1:
+                    manage_folder_interactive(search_matches[0], min_size)
+                elif len(search_matches) > 1:
+                    print(f"\nFound {len(search_matches)} matching folders:")
+                    print(f"{'No.':<4} | {'Device':<20} | {'Path':<55} | {'Size (GB)':>10} | {'Tag':<15}")
+                    print("-" * 110)
+                    for m_idx, m_row in enumerate(search_matches, 1):
+                        m_sz = (m_row['size'] or 0) / (1024**3)
+                        m_tag = m_row['tag'] if m_row['tag'] else "[none]"
+                        m_path = m_row['path']
+                        if len(m_path) > 53:
+                            m_path = "..." + m_path[-50:]
+                        print(f"{m_idx:<4} | {m_row['device_name'][:20]:<20} | {m_path:<55} | {m_sz:>10.2f} | {m_tag:<15}")
+                    print("-" * 110)
+                    sel_match = input(f"Select matching folder (1-{len(search_matches)}, or Enter to cancel): ").strip()
+                    if sel_match.isdigit() and 1 <= int(sel_match) <= len(search_matches):
+                        manage_folder_interactive(search_matches[int(sel_match) - 1], min_size)
+                else:
+                    print(f"No folder found matching '{choice}'. Enter a number 1-{len(rows)}, a path search, or 'D' for Device Management.")
 
         elif current_view == 'device':
             print("\n" + "=" * 155)
