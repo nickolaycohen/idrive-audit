@@ -277,7 +277,7 @@ conn.commit()
 
 def sync_devices_table(raw_devices=None):
     """Ensure all known devices from RAW_DEVICES and api_calls exist in devices table.
-    Default new devices to online = 1 (Online).
+    Preserves user-configured online/offline status choices.
     """
     if raw_devices:
         for dev in raw_devices:
@@ -491,6 +491,13 @@ def fetch_devices():
 
         if attempt == 0:
             sys.stdout.write("\n[!] The current session cookie failed authentication (session expired).\n")
+            fresh_cookie = get_idrive_cookies()
+            if fresh_cookie and fresh_cookie != COOKIE_STR:
+                sys.stdout.write("[*] Found fresh session cookie in browser cache. Retrying authentication...\n")
+                COOKIE_STR = fresh_cookie
+                session.headers.update({'Cookie': COOKIE_STR})
+                continue
+
             sys.stdout.write("--> Please open Chrome / browser and log into https://www.idrive.com to refresh your session.\n")
             if sys.stdin.isatty():
                 try:
@@ -576,15 +583,18 @@ def crawl(device_id, device_name, current_path, depth, max_depth=MAX_DEPTH, igno
     # canonical path for DB lookups/logging
     norm = normalize_path(current_path)
 
-    # If starting a forced or targeted scan (depth 1), reset existing sizes for this path 
-    # and immediate children to 0. This preserves data from deeper historical scans 
-    # while ensuring deleted items at this level are correctly reflected.
+    # Re-fetch properties for current_path at starting depth to update size, lmd, and timestamp
+    if depth == 1:
+        get_details(device_id, device_name, norm, ignore_skip=ignore_skip)
+
+    # If starting a forced or targeted scan (depth 1), reset existing sizes for immediate children to 0.
+    # This preserves data from deeper historical scans while ensuring deleted items at this level are correctly reflected.
     if depth == 1 and ignore_skip:
         child_pattern = norm.rstrip('/') + '/%'
         exclude_pattern = norm.rstrip('/') + '/%/%'
         cur.execute(
-            "UPDATE api_calls SET size=0, filecount=0 WHERE device_id=? AND (path=? OR (path LIKE ? AND path NOT LIKE ?))",
-            (device_id, norm, child_pattern, exclude_pattern)
+            "UPDATE api_calls SET size=0, filecount=0 WHERE device_id=? AND path LIKE ? AND path NOT LIKE ?",
+            (device_id, child_pattern, exclude_pattern)
         )
         conn.commit()
 
@@ -644,9 +654,10 @@ def crawl(device_id, device_name, current_path, depth, max_depth=MAX_DEPTH, igno
             do_mark = True
 
         if do_mark and items:
+            now_iso = datetime.utcnow().isoformat()
             cur.execute(
-                'UPDATE api_calls SET drilled=1 WHERE device_id=? AND path=? AND (endpoint=? OR endpoint=?)',
-                (device_id, norm, 'browseFolder', 'getProperties')
+                'UPDATE api_calls SET drilled=1, timestamp=? WHERE device_id=? AND path=? AND (endpoint=? OR endpoint=?)',
+                (now_iso, device_id, norm, 'browseFolder', 'getProperties')
             )
             affected = cur.rowcount
             conn.commit()
@@ -737,7 +748,7 @@ def print_storage_summary(min_size=MIN_SIZE_GB, to_console=False):
         """
         SELECT device_id, device_name, path, size, tag, timestamp, drilled
         FROM api_calls
-        WHERE endpoint = 'getProperties' AND size IS NOT NULL AND size > 0
+        WHERE endpoint = 'getProperties' AND size IS NOT NULL AND size >= 0
         ORDER BY device_name, path
         """
     )
@@ -780,7 +791,7 @@ def print_storage_summary(min_size=MIN_SIZE_GB, to_console=False):
             if not is_child:
                 top_level_paths.add(f['path'])
                 display_folders.append(f)
-            elif f.get('drilled') and f['drilled'] > 0:
+            elif (f.get('drilled') and f['drilled'] > 0) or (f.get('tag') and f['tag'] != '' and f['tag'] != '0'):
                 display_folders.append(f)
 
         if not display_folders:
@@ -793,7 +804,8 @@ def print_storage_summary(min_size=MIN_SIZE_GB, to_console=False):
             'id': dev_id,
             'name': dev_info['name'],
             'total_size': total_size,
-            'display_folders': display_folders
+            'display_folders': display_folders,
+            'top_level_paths': top_level_paths
         })
         
     dev_status_map = get_devices_status_map()
@@ -842,11 +854,21 @@ def print_storage_summary(min_size=MIN_SIZE_GB, to_console=False):
             for f in ds['display_folders']:
                 f_gb = f['size'] / (1024**3)
                 is_drilled = bool(f.get('drilled') and f['drilled'] > 0)
-                if not (f_gb >= min_size or is_drilled or show_all_top):
+                is_tagged = bool(f.get('tag') and f['tag'] != '' and f['tag'] != '0')
+                is_top_level = f['path'] in ds.get('top_level_paths', set())
+                if not (f_gb >= min_size or is_drilled or is_tagged or show_all_top or is_top_level):
                     continue
 
-                depth = f['path'].count('/')
-                prefix = "  " + "  " * max(0, depth - 2) + ("└─ " if depth > 2 else "- ")
+                if is_top_level:
+                    prefix = "  - "
+                else:
+                    parents = [tl for tl in ds.get('top_level_paths', set()) if f['path'].startswith(tl + '/')]
+                    if parents:
+                        parent_path = max(parents, key=len)
+                        rel_depth = max(1, f['path'].count('/') - parent_path.count('/'))
+                    else:
+                        rel_depth = max(1, f['path'].count('/') - 1)
+                    prefix = "  " + "  " * rel_depth + "└─ "
                 path_str = f['path']
                 if len(prefix + path_str) > 60:
                     path_str = "..." + path_str[-(57 - len(prefix)):]
@@ -896,16 +918,24 @@ def run_interactive(min_size=MIN_SIZE_GB):
             # Print storage usage by device
             print_storage_summary(min_size=min_size)
 
+            status_map = get_devices_status_map()
+
+            def row_sort_key(r):
+                dev_id = r['device_id']
+                online = status_map.get(dev_id, {}).get('online', 0)
+                dev_name = r['device_name'] or ''
+                sz = r['size'] if r['size'] is not None else 0
+                return (-online, dev_name.lower(), -sz)
+
             # Fetch all drilled folders (which have drilled > 0 in database)
             cur.execute(
                 """
                 SELECT device_id, device_name, path, size, filecount, tag, active, lmd
                 FROM api_calls
                 WHERE endpoint = 'getProperties' AND drilled > 0
-                ORDER BY device_name, path
                 """
             )
-            drilled_rows = cur.fetchall()
+            drilled_rows = sorted(cur.fetchall(), key=row_sort_key)
 
             # Fetch all tagged folders (excluding drilled folders)
             cur.execute(
@@ -913,10 +943,9 @@ def run_interactive(min_size=MIN_SIZE_GB):
                 SELECT device_id, device_name, path, size, filecount, tag, active, lmd
                 FROM api_calls
                 WHERE endpoint = 'getProperties' AND tag IS NOT NULL AND tag != '' AND tag != '0' AND (drilled IS NULL OR drilled = 0)
-                ORDER BY active DESC, device_name, size DESC
                 """
             )
-            tagged_rows = cur.fetchall()
+            tagged_rows = sorted(cur.fetchall(), key=row_sort_key)
 
             # Fetch the top 10 largest untagged folders (excluding drilled folders)
             cur.execute(
@@ -937,62 +966,65 @@ def run_interactive(min_size=MIN_SIZE_GB):
             print("=" * 149)
 
             current_idx = 1
-            header_str = f"{'No.':<4} | {'Device':<20} | {'Path':<55} | {'Size (GB)':>10} | {'Last Modified':<19} | {'Tag':<18} | {'Active':<6}"
+            header_str = f"{'No.':<4} | {'Device':<20} | {'Path':<55} | {'Size (GB)':>10} | {'Last Modified':<19} | {'Tag':<18} | {'Status':<7}"
 
             if drilled_rows:
-                print(f"\n--- DRILLED FOLDERS ---")
+                print(f"\n--- DRILLED FOLDERS (Expanded into subfolders) ---")
                 print(header_str)
                 print("-" * 149)
                 for row in drilled_rows:
                     size_val = row['size'] if row['size'] is not None else 0
                     size_gb = size_val / (1024**3)
                     tag_str = row['tag'] if row['tag'] else "[none]"
-                    active_str = "Yes" if row['active'] else "No"
+                    dev_id = row['device_id']
+                    status_str = status_map.get(dev_id, {}).get('status_str', 'Offline')
                     dev_name = row['device_name'][:20]
                     path_str = row['path']
                     if len(path_str) > 53:
                         path_str = "..." + path_str[-50:]
                     lmd_raw = row['lmd'] if 'lmd' in row.keys() and row['lmd'] else ''
                     lmd_str = lmd_raw.replace('T', ' ')[:19] if lmd_raw else "[unknown]"
-                    print(f"{current_idx:<4} | {dev_name:<20} | {path_str:<55} | {size_gb:>10.2f} | {lmd_str:<19} | {tag_str:<18} | {active_str:<6}")
+                    print(f"{current_idx:<4} | {dev_name:<20} | {path_str:<55} | {size_gb:>10.2f} | {lmd_str:<19} | {tag_str:<18} | {status_str:<7}")
                     current_idx += 1
                 print("-" * 149)
 
             if tagged_rows:
-                print(f"\n--- TAGGED FOLDERS ---")
+                print(f"\n--- TAGGED FOLDERS (Not drilled down) ---")
                 print(header_str)
                 print("-" * 149)
                 for row in tagged_rows:
                     size_val = row['size'] if row['size'] is not None else 0
                     size_gb = size_val / (1024**3)
                     tag_str = row['tag']
-                    active_str = "Yes" if row['active'] else "No"
+                    dev_id = row['device_id']
+                    status_str = status_map.get(dev_id, {}).get('status_str', 'Offline')
                     dev_name = row['device_name'][:20]
                     path_str = row['path']
                     if len(path_str) > 53:
                         path_str = "..." + path_str[-50:]
                     lmd_raw = row['lmd'] if 'lmd' in row.keys() and row['lmd'] else ''
                     lmd_str = lmd_raw.replace('T', ' ')[:19] if lmd_raw else "[unknown]"
-                    print(f"{current_idx:<4} | {dev_name:<20} | {path_str:<55} | {size_gb:>10.2f} | {lmd_str:<19} | {tag_str:<18} | {active_str:<6}")
+                    print(f"{current_idx:<4} | {dev_name:<20} | {path_str:<55} | {size_gb:>10.2f} | {lmd_str:<19} | {tag_str:<18} | {status_str:<7}")
                     current_idx += 1
                 print("-" * 149)
 
             if untagged_rows:
-                print(f"\n--- UNTAGGED FOLDERS (TOP 10 BY SIZE) ---")
+                print(f"\n--- UNTAGGED FOLDERS (Not drilled down - Top 10 by size) ---")
                 print(header_str)
                 print("-" * 149)
                 for row in untagged_rows:
                     size_val = row['size'] if row['size'] is not None else 0
                     size_gb = size_val / (1024**3)
                     tag_str = "[none]"
-                    active_str = "Yes" if row['active'] else "No"
+                    dev_id = row['device_id']
+                    status_str = status_map.get(dev_id, {}).get('status_str', 'Offline')
                     dev_name = row['device_name'][:20]
                     path_str = row['path']
                     if len(path_str) > 53:
                         path_str = "..." + path_str[-50:]
                     lmd_raw = row['lmd'] if 'lmd' in row.keys() and row['lmd'] else ''
                     lmd_str = lmd_raw.replace('T', ' ')[:19] if lmd_raw else "[unknown]"
-                    print(f"{current_idx:<4} | {dev_name:<20} | {path_str:<55} | {size_gb:>10.2f} | {lmd_str:<19} | {tag_str:<18} | {active_str:<6}")
+                    print(f"{current_idx:<4} | {dev_name:<20} | {path_str:<55} | {size_gb:>10.2f} | {lmd_str:<19} | {tag_str:<18} | {status_str:<7}")
                     current_idx += 1
                 print("-" * 149)
 
@@ -1122,10 +1154,11 @@ def manage_device_interactive(device_id, device_name, min_size):
         print("Actions:")
         print("  1. Drill Down / Audit Device (discover top-level folders & sizes)")
         print(f"  2. Toggle Online/Offline status (Current: {dev_info['status_str']})")
-        print("  3. Go Back")
+        print("  3. Purge / Delete device audit records from database")
+        print("  4. Go Back")
         
-        act = input("Choose action (1-3): ").strip()
-        if not act or act == '3':
+        act = input("Choose action (1-4): ").strip()
+        if not act or act == '4':
             break
         elif act == '1':
             print(f"\nScanning / drilling top-level folders on {dev_info['name']}...")
@@ -1170,6 +1203,18 @@ def manage_device_interactive(device_id, device_name, min_size):
             new_status_str = "Online" if new_online else "Offline"
             set_device_status(device_id, new_online)
             print(f"\n[+] Set device '{dev_info['name']}' status to: {new_status_str}")
+        elif act == '3':
+            confirm = input(f"Are you sure you want to purge all audit records for '{dev_info['name']}' from database? (y/N): ").strip().lower()
+            if confirm == 'y':
+                cur.execute("DELETE FROM api_calls WHERE device_id = ?", (device_id,))
+                cur.execute("DELETE FROM devices WHERE device_id = ?", (device_id,))
+                conn.commit()
+                print(f"\n[+] Purged device '{dev_info['name']}' and its audit records from database.")
+                try:
+                    print_storage_summary(min_size=min_size)
+                except Exception:
+                    pass
+                break
 
 
 
