@@ -766,9 +766,9 @@ def print_storage_summary(min_size=MIN_SIZE_GB, to_console=False):
         return
         
     lines = []
-    lines.append("\n" + "=" * 155)
-    lines.append(f"{'IDRIVE STORAGE USE BY DEVICE':^155}")
-    lines.append("=" * 155)
+    lines.append("\n" + "=" * 180)
+    lines.append(f"{'IDRIVE STORAGE USE BY DEVICE':^180}")
+    lines.append("=" * 180)
     
     def is_drive_root(path):
         p = path.strip('/')
@@ -781,23 +781,54 @@ def print_storage_summary(min_size=MIN_SIZE_GB, to_console=False):
         folders = dev_info['folders']
         folders_sorted = sorted(folders.values(), key=lambda x: len(x['path']))
         
+        drilled_paths = {path for path, f in folders.items() if f.get('drilled') and f['drilled'] > 0}
         top_level_paths = set()
         display_folders = []
         
         for f in folders_sorted:
             if is_drive_root(f['path']) and len(folders_sorted) > 1:
                 continue
-            is_child = any(f['path'].startswith(tl + '/') for tl in top_level_paths)
-            if not is_child:
+            is_child_of_top = any(f['path'].startswith(tl + '/') for tl in top_level_paths)
+            is_child_of_drilled = any(f['path'].startswith(dp + '/') for dp in drilled_paths)
+            
+            if not is_child_of_top:
                 top_level_paths.add(f['path'])
                 display_folders.append(f)
-            elif (f.get('drilled') and f['drilled'] > 0) or (f.get('tag') and f['tag'] != '' and f['tag'] != '0'):
+            elif (f.get('drilled') and f['drilled'] > 0) or (f.get('tag') and f['tag'] != '' and f['tag'] != '0') or is_child_of_drilled:
                 display_folders.append(f)
 
         if not display_folders:
             continue
 
-        display_folders.sort(key=lambda x: x['path'])
+        def get_tree_sorted_folders(folders_list):
+            folder_map = {f['path']: f for f in folders_list}
+            children_map = {f['path']: [] for f in folders_list}
+            roots = []
+
+            for f in folders_list:
+                ancestors = [p for p in folder_map if f['path'].startswith(p + '/')]
+                if ancestors:
+                    closest_parent = max(ancestors, key=len)
+                    children_map[closest_parent].append(f)
+                else:
+                    roots.append(f)
+
+            roots.sort(key=lambda x: (-(x['size'] if x['size'] is not None else 0), x['path']))
+            for p_path in children_map:
+                children_map[p_path].sort(key=lambda x: (-(x['size'] if x['size'] is not None else 0), x['path']))
+
+            res = []
+            def traverse(f):
+                res.append(f)
+                for child in children_map[f['path']]:
+                    traverse(child)
+
+            for root in roots:
+                traverse(root)
+
+            return res
+
+        display_folders = get_tree_sorted_folders(display_folders)
         total_size = sum(f['size'] for f in display_folders if f['path'] in top_level_paths)
         
         dev_summaries.append({
@@ -805,7 +836,8 @@ def print_storage_summary(min_size=MIN_SIZE_GB, to_console=False):
             'name': dev_info['name'],
             'total_size': total_size,
             'display_folders': display_folders,
-            'top_level_paths': top_level_paths
+            'top_level_paths': top_level_paths,
+            'drilled_paths': drilled_paths
         })
         
     dev_status_map = get_devices_status_map()
@@ -842,13 +874,13 @@ def print_storage_summary(min_size=MIN_SIZE_GB, to_console=False):
         l_str = info['lmd_str']
         l_path = info['path']
         if l_path:
-            if len(l_path) > 40:
-                l_path = "..." + l_path[-37:]
+            if len(l_path) > 50:
+                l_path = "..." + l_path[-47:]
             mod_display = f"{l_str} ({l_path})"
         else:
             mod_display = l_str
 
-        lines.append(f"Device: {ds['name']:<22} | Status: {status_str:<7} | Last Mod: {mod_display:<65} | Total Scanned Size: {total_gb:>8.2f} GB")
+        lines.append(f"Device: {ds['name']:<22} | Status: {status_str:<7} | Last Mod: {mod_display:<75} | Total Scanned Size: {total_gb:>8.2f} GB")
         if ds['display_folders']:
             show_all_top = total_gb < min_size
             for f in ds['display_folders']:
@@ -856,22 +888,24 @@ def print_storage_summary(min_size=MIN_SIZE_GB, to_console=False):
                 is_drilled = bool(f.get('drilled') and f['drilled'] > 0)
                 is_tagged = bool(f.get('tag') and f['tag'] != '' and f['tag'] != '0')
                 is_top_level = f['path'] in ds.get('top_level_paths', set())
-                if not (f_gb >= min_size or is_drilled or is_tagged or show_all_top or is_top_level):
+                is_child_of_drilled = any(f['path'].startswith(dp + '/') for dp in ds.get('drilled_paths', set()))
+                if not (f_gb >= min_size or is_drilled or is_tagged or show_all_top or is_top_level or is_child_of_drilled):
                     continue
 
                 if is_top_level:
                     prefix = "  - "
+                    rel_depth = 0
                 else:
                     parents = [tl for tl in ds.get('top_level_paths', set()) if f['path'].startswith(tl + '/')]
                     if parents:
-                        parent_path = max(parents, key=len)
+                        parent_path = min(parents, key=len)
                         rel_depth = max(1, f['path'].count('/') - parent_path.count('/'))
                     else:
                         rel_depth = max(1, f['path'].count('/') - 1)
                     prefix = "  " + "  " * rel_depth + "└─ "
                 path_str = f['path']
-                if len(prefix + path_str) > 60:
-                    path_str = "..." + path_str[-(57 - len(prefix)):]
+                if len(prefix + path_str) > 90:
+                    path_str = "..." + path_str[-(87 - len(prefix)):]
                 full_path_str = f"{prefix}{path_str}"
 
                 ts_raw = f['timestamp'] if f['timestamp'] else ''
@@ -888,10 +922,11 @@ def print_storage_summary(min_size=MIN_SIZE_GB, to_console=False):
 
                 drilled_str = f" | Drilled: {ts_str}{stale_str}" if (f.get('drilled') and f['drilled'] > 0) else f" | Audited: {ts_str}"
                 tag_suffix = f" | Tag: {f['tag']}" if f['tag'] else ""
-                lines.append(f"  {full_path_str:<60} | {f_gb:>10.2f} GB{drilled_str}{tag_suffix}")
+                size_indent = "  " * rel_depth
+                lines.append(f"  {full_path_str:<90} | {size_indent}{f_gb:>10.2f} GB{drilled_str}{tag_suffix}")
         else:
             lines.append(f"  - (no folders >= {min_size:.2f} GB)")
-    lines.append("=" * 155)
+    lines.append("=" * 180)
     
     table_content = "\n".join(lines) + "\n"
     log_file = os.path.join(LOG_DIR, "idrive_storage_use_by_device.log")
@@ -910,10 +945,10 @@ def run_interactive(min_size=MIN_SIZE_GB):
 
     while True:
         if current_view == 'storage':
-            print("\n" + "=" * 149)
-            print(f"{'IDRIVE AUDIT INTERACTIVE DASHBOARD':^149}")
-            print(f"{'[S] Storage Management (Active)   |   [D] Device Management':^149}")
-            print("=" * 149)
+            print("\n" + "=" * 155)
+            print(f"{'IDRIVE AUDIT INTERACTIVE DASHBOARD':^155}")
+            print(f"{'[S] Storage Management (Active)   |   [D] Device Management':^155}")
+            print("=" * 155)
 
             # Print storage usage by device
             print_storage_summary(min_size=min_size)
@@ -924,8 +959,8 @@ def run_interactive(min_size=MIN_SIZE_GB):
                 dev_id = r['device_id']
                 online = status_map.get(dev_id, {}).get('online', 0)
                 dev_name = r['device_name'] or ''
-                sz = r['size'] if r['size'] is not None else 0
-                return (-online, dev_name.lower(), -sz)
+                path_val = r['path'] or ''
+                return (-online, dev_name.lower(), path_val.lower())
 
             # Fetch all drilled folders (which have drilled > 0 in database)
             cur.execute(
@@ -961,17 +996,17 @@ def run_interactive(min_size=MIN_SIZE_GB):
 
             rows = list(drilled_rows) + list(tagged_rows) + list(untagged_rows)
 
-            print("\n" + "=" * 149)
-            print(f"{'IDRIVE ACCOUNT STORAGE MANAGEMENT':^149}")
-            print("=" * 149)
+            print("\n" + "=" * 155)
+            print(f"{'IDRIVE ACCOUNT STORAGE MANAGEMENT':^155}")
+            print("=" * 155)
 
             current_idx = 1
-            header_str = f"{'No.':<4} | {'Device':<20} | {'Path':<55} | {'Size (GB)':>10} | {'Last Modified':<19} | {'Tag':<18} | {'Status':<7}"
+            header_str = f"{'No.':<4} | {'Device':<20} | {'Path':<55} | {'Size (GB)':>10} | {'Last Modified':<19} | {'Tag':<18} | {'Device Status':<13}"
 
             if drilled_rows:
                 print(f"\n--- DRILLED FOLDERS (Expanded into subfolders) ---")
                 print(header_str)
-                print("-" * 149)
+                print("-" * 155)
                 for row in drilled_rows:
                     size_val = row['size'] if row['size'] is not None else 0
                     size_gb = size_val / (1024**3)
@@ -984,14 +1019,14 @@ def run_interactive(min_size=MIN_SIZE_GB):
                         path_str = "..." + path_str[-50:]
                     lmd_raw = row['lmd'] if 'lmd' in row.keys() and row['lmd'] else ''
                     lmd_str = lmd_raw.replace('T', ' ')[:19] if lmd_raw else "[unknown]"
-                    print(f"{current_idx:<4} | {dev_name:<20} | {path_str:<55} | {size_gb:>10.2f} | {lmd_str:<19} | {tag_str:<18} | {status_str:<7}")
+                    print(f"{current_idx:<4} | {dev_name:<20} | {path_str:<55} | {size_gb:>10.2f} | {lmd_str:<19} | {tag_str:<18} | {status_str:<13}")
                     current_idx += 1
-                print("-" * 149)
+                print("-" * 155)
 
             if tagged_rows:
                 print(f"\n--- TAGGED FOLDERS (Not drilled down) ---")
                 print(header_str)
-                print("-" * 149)
+                print("-" * 155)
                 for row in tagged_rows:
                     size_val = row['size'] if row['size'] is not None else 0
                     size_gb = size_val / (1024**3)
@@ -1004,14 +1039,14 @@ def run_interactive(min_size=MIN_SIZE_GB):
                         path_str = "..." + path_str[-50:]
                     lmd_raw = row['lmd'] if 'lmd' in row.keys() and row['lmd'] else ''
                     lmd_str = lmd_raw.replace('T', ' ')[:19] if lmd_raw else "[unknown]"
-                    print(f"{current_idx:<4} | {dev_name:<20} | {path_str:<55} | {size_gb:>10.2f} | {lmd_str:<19} | {tag_str:<18} | {status_str:<7}")
+                    print(f"{current_idx:<4} | {dev_name:<20} | {path_str:<55} | {size_gb:>10.2f} | {lmd_str:<19} | {tag_str:<18} | {status_str:<13}")
                     current_idx += 1
-                print("-" * 149)
+                print("-" * 155)
 
             if untagged_rows:
                 print(f"\n--- UNTAGGED FOLDERS (Not drilled down - Top 10 by size) ---")
                 print(header_str)
-                print("-" * 149)
+                print("-" * 155)
                 for row in untagged_rows:
                     size_val = row['size'] if row['size'] is not None else 0
                     size_gb = size_val / (1024**3)
@@ -1024,9 +1059,9 @@ def run_interactive(min_size=MIN_SIZE_GB):
                         path_str = "..." + path_str[-50:]
                     lmd_raw = row['lmd'] if 'lmd' in row.keys() and row['lmd'] else ''
                     lmd_str = lmd_raw.replace('T', ' ')[:19] if lmd_raw else "[unknown]"
-                    print(f"{current_idx:<4} | {dev_name:<20} | {path_str:<55} | {size_gb:>10.2f} | {lmd_str:<19} | {tag_str:<18} | {status_str:<7}")
+                    print(f"{current_idx:<4} | {dev_name:<20} | {path_str:<55} | {size_gb:>10.2f} | {lmd_str:<19} | {tag_str:<18} | {status_str:<13}")
                     current_idx += 1
-                print("-" * 149)
+                print("-" * 155)
 
             print(f"Options: Select folder (1-{len(rows)}), enter path or keyword search (e.g. '/Pictures'), 'D' for Device Management, 'r' to refresh, 'q' to quit.")
             choice = input("Choice: ").strip()
