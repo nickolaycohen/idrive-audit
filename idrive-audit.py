@@ -818,13 +818,26 @@ def print_storage_summary(min_size=MIN_SIZE_GB, to_console=False):
                 children_map[p_path].sort(key=lambda x: (-(x['size'] if x['size'] is not None else 0), x['path']))
 
             res = []
-            def traverse(f):
-                res.append(f)
+            def traverse(f, ancestor_tags):
+                f_tag = (f.get('tag') or '').strip().lower()
+                is_same_tag_child = False
+                for anc_tag in ancestor_tags:
+                    if anc_tag and f_tag == anc_tag:
+                        is_same_tag_child = True
+                        break
+
+                if not is_same_tag_child:
+                    res.append(f)
+
+                next_ancestor_tags = list(ancestor_tags)
+                if f_tag and f_tag != '0':
+                    next_ancestor_tags.append(f_tag)
+
                 for child in children_map[f['path']]:
-                    traverse(child)
+                    traverse(child, next_ancestor_tags)
 
             for root in roots:
-                traverse(root)
+                traverse(root, [])
 
             return res
 
@@ -1558,11 +1571,25 @@ if __name__ == "__main__":
                 conn.commit()
                 print(f"Removed tag from {args.untag} on {dev['nick_name']} ({dev['device_id']})")
             if args.list_tags:
-                cur.execute("SELECT path,tag FROM api_calls WHERE device_id=? AND tag<>''", (dev['device_id'],))
+                cur.execute("SELECT DISTINCT path, tag FROM api_calls WHERE device_id=? AND tag IS NOT NULL AND tag <> '' AND tag <> '0' ORDER BY path", (dev['device_id'],))
                 rows = cur.fetchall()
-                print(f"Tagged paths for {dev['nick_name']} ({dev['device_id']}):")
+                top_level_rows = []
                 for r in rows:
-                    print("  ", r['path'], "->", repr(r['tag']))
+                    r_path = r['path']
+                    r_tag = (r['tag'] or '').strip().lower()
+                    has_ancestor = any(
+                        r_path.startswith(p['path'].rstrip('/') + '/') and
+                        (p['tag'] or '').strip().lower() == r_tag
+                        for p in rows
+                    )
+                    if not has_ancestor:
+                        top_level_rows.append(r)
+                if top_level_rows:
+                    print(f"\nTagged paths for {dev['nick_name']} ({dev['device_id']}):")
+                    for r in top_level_rows:
+                        sub_cnt = sum(1 for sub in rows if sub['path'].startswith(r['path'].rstrip('/') + '/') and sub['path'] != r['path'])
+                        sub_info = f" (+{sub_cnt} subfolders)" if sub_cnt > 0 else ""
+                        print(f"   {r['path']} -> {repr(r['tag'])}{sub_info}")
         conn.close()
         sys.exit(0)
 

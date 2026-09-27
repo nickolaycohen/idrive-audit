@@ -81,6 +81,16 @@ This script catalogs connected storage drives, external volumes, and local folde
 
 ### Commands
 
+* **Run Interactive Mode (Recommended)**:
+  Launches an interactive console menu to perform storage drive scanning, targeted folder scans, audit report generation, tagging, folder class management, and registered folder browsing.
+  ```bash
+  python3 scan-local-drives.py --interactive
+  # or
+  python3 scan-local-drives.py -i
+  # or simply
+  python3 scan-local-drives.py
+  ```
+
 * **Scan Connected Drives**:
   Scans all attached storage volumes and directories larger than 1GB.
   ```bash
@@ -116,4 +126,10 @@ This script catalogs connected storage drives, external volumes, and local folde
 
   # Apply macOS Finder tags color-codes
   python3 scan-local-drives.py --finder-tag "/Volumes/Extreme Pro/Photos=Orange"
+
+  # Display all assigned tags
+  python3 scan-local-drives.py --list-tags
+
+  # Sync native macOS Finder Tags from OS extended attributes into database
+  python3 scan-local-drives.py --sync-finder-tags
   ```
