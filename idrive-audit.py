@@ -173,7 +173,11 @@ session.headers.update(HEADERS)
 
 # --- DATABASE for logging API results (timestamped) ---
 import sqlite3
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+
+def get_now_iso():
+    """Return ISO formatted current UTC timestamp."""
+    return datetime.now(timezone.utc).isoformat()
 
 DB_FILE = "idrive_audit.db"
 
@@ -263,21 +267,31 @@ if 'active' not in cols:
     conn.commit()
 conn.commit()
 
-# --- DEVICE ONLINE/OFFLINE TABLE AND HELPERS ---
+# --- DEVICE ONLINE/OFFLINE & ACTIVE/INACTIVE TABLE AND HELPERS ---
 cur.execute(
     '''
     CREATE TABLE IF NOT EXISTS devices (
         device_id TEXT PRIMARY KEY,
         device_name TEXT,
-        online INTEGER DEFAULT 1
+        online INTEGER DEFAULT 1,
+        active INTEGER DEFAULT 1
     )
     '''
 )
 conn.commit()
 
+# Ensure active column exists in devices table for existing databases
+cur.execute("PRAGMA table_info(devices)")
+dev_cols = [row['name'] for row in cur.fetchall()]
+if 'active' not in dev_cols:
+    cur.execute("ALTER TABLE devices ADD COLUMN active INTEGER DEFAULT 1")
+    conn.commit()
+    cur.execute("UPDATE devices SET active = online WHERE online IS NOT NULL")
+    conn.commit()
+
 def sync_devices_table(raw_devices=None):
     """Ensure all known devices from RAW_DEVICES and api_calls exist in devices table.
-    Preserves user-configured online/offline status choices.
+    Preserves user-configured active/inactive status choices.
     """
     if raw_devices:
         for dev in raw_devices:
@@ -286,7 +300,7 @@ def sync_devices_table(raw_devices=None):
             if dev_id:
                 cur.execute("SELECT device_id FROM devices WHERE device_id = ?", (dev_id,))
                 if not cur.fetchone():
-                    cur.execute("INSERT INTO devices (device_id, device_name, online) VALUES (?, ?, 1)", (dev_id, dev_name))
+                    cur.execute("INSERT INTO devices (device_id, device_name, online, active) VALUES (?, ?, 1, 1)", (dev_id, dev_name))
                 else:
                     cur.execute("UPDATE devices SET device_name = ? WHERE device_id = ?", (dev_name, dev_id))
     
@@ -298,36 +312,48 @@ def sync_devices_table(raw_devices=None):
         dev_name = row['device_name'] or dev_id
         cur.execute("SELECT device_id FROM devices WHERE device_id = ?", (dev_id,))
         if not cur.fetchone():
-            cur.execute("INSERT INTO devices (device_id, device_name, online) VALUES (?, ?, 1)", (dev_id, dev_name))
+            cur.execute("INSERT INTO devices (device_id, device_name, online, active) VALUES (?, ?, 1, 1)", (dev_id, dev_name))
     conn.commit()
 
 def get_devices_status_map():
     sync_devices_table(RAW_DEVICES if 'RAW_DEVICES' in globals() else None)
-    cur.execute("SELECT device_id, device_name, online FROM devices")
+    cur.execute("SELECT device_id, device_name, online, active FROM devices")
     rows = cur.fetchall()
     res = {}
     for r in rows:
+        act = r['active'] if 'active' in r.keys() and r['active'] is not None else (r['online'] if 'online' in r.keys() and r['online'] is not None else 1)
+        onl = r['online'] if 'online' in r.keys() and r['online'] is not None else act
         res[r['device_id']] = {
             'name': r['device_name'],
-            'online': r['online'],
-            'status_str': 'Online' if r['online'] else 'Offline'
+            'online': onl,
+            'active': act,
+            'status_str': 'Active' if act else 'Inactive'
         }
     return res
 
-def set_device_status(device_identifier, is_online):
-    """Update device online status by device_id or device_name substring."""
+def set_device_status(device_identifier, is_active):
+    """Update device active (and online) status by device_id or device_name."""
     sync_devices_table(RAW_DEVICES if 'RAW_DEVICES' in globals() else None)
-    online_val = 1 if is_online else 0
+    val = 1 if is_active else 0
+    # Try exact match first
     cur.execute(
-        "UPDATE devices SET online = ? WHERE LOWER(device_id) LIKE ? OR LOWER(device_name) LIKE ?",
-        (online_val, f"%{device_identifier.lower()}%", f"%{device_identifier.lower()}%")
+        "UPDATE devices SET active = ?, online = ? WHERE LOWER(device_id) = ? OR LOWER(device_name) = ?",
+        (val, val, device_identifier.lower(), device_identifier.lower())
     )
+    count = cur.rowcount
+    if count == 0:
+        # Fall back to substring match if no exact match
+        cur.execute(
+            "UPDATE devices SET active = ?, online = ? WHERE LOWER(device_id) LIKE ? OR LOWER(device_name) LIKE ?",
+            (val, val, f"%{device_identifier.lower()}%", f"%{device_identifier.lower()}%")
+        )
+        count = cur.rowcount
     conn.commit()
     try:
         print_storage_summary()
     except Exception:
         pass
-    return cur.rowcount
+    return count
 
 
 # Synchronize any legacy database records where size column is 0 or NULL but response_json has API size
@@ -424,7 +450,7 @@ def log_api_call(device_id, device_name, endpoint, path, details):
             cur.execute(
                 "UPDATE api_calls SET timestamp=?, device_name=?, size=?, filecount=?, lmd=?, response_json=?, tag=? WHERE id=?",
                 (
-                    datetime.utcnow().isoformat(),
+                    get_now_iso(),
                     device_name,
                     size_val,
                     filecount_val,
@@ -446,7 +472,7 @@ def log_api_call(device_id, device_name, endpoint, path, details):
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''',
         (
-            datetime.utcnow().isoformat(),
+            get_now_iso(),
             device_id,
             device_name,
             endpoint,
@@ -531,14 +557,24 @@ class Logger(object):
         self.log = open(OUTPUT_FILE, "w", encoding="utf-8")
 
     def write(self, message):
-        self.terminal.write(message)
+        try:
+            self.terminal.write(message)
+        except BrokenPipeError:
+            pass
         # Filter out progress indicators (\r) and ANSI escape sequences to keep the file clean
         if not (message.startswith('\r') or '\033[' in message):
             self.log.write(message)
             self.log.flush()
 
     def flush(self):
-        self.terminal.flush()
+        try:
+            self.terminal.flush()
+        except BrokenPipeError:
+            pass
+        try:
+            self.log.flush()
+        except Exception:
+            pass
 
 sys.stdout = Logger()
 
@@ -654,7 +690,7 @@ def crawl(device_id, device_name, current_path, depth, max_depth=MAX_DEPTH, igno
             do_mark = True
 
         if do_mark and items:
-            now_iso = datetime.utcnow().isoformat()
+            now_iso = get_now_iso()
             cur.execute(
                 'UPDATE api_calls SET drilled=1, timestamp=? WHERE device_id=? AND path=? AND (endpoint=? OR endpoint=?)',
                 (now_iso, device_id, norm, 'browseFolder', 'getProperties')
@@ -691,7 +727,7 @@ def tag_folder(device_id, device_name, path, tag_value):
     if cur.rowcount == 0:
         cur.execute(
             "INSERT INTO api_calls (timestamp, device_id, device_name, endpoint, path, tag) VALUES (?, ?, ?, 'getProperties', ?, ?)",
-            (datetime.utcnow().isoformat(), device_id, device_name, norm, tag_value)
+            (get_now_iso(), device_id, device_name, norm, tag_value)
         )
 
     conn.commit()
@@ -727,29 +763,39 @@ def should_skip(device_id, path, endpoint='browseFolder', hours=24):
         return True
     try:
         last = datetime.fromisoformat(row['timestamp'])
+        if last.tzinfo is not None:
+            last = last.astimezone(timezone.utc).replace(tzinfo=None)
     except Exception:
         if SKIP_DEBUG:
             print(f"should_skip: bad timestamp '{row['timestamp']}'")
         return False
-    delta = datetime.utcnow() - last
+    now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+    delta = now_utc - last
     result = delta < timedelta(hours=hours)
     if SKIP_DEBUG:
         print(f"should_skip: {endpoint} {norm} ({device_id}) last={last.isoformat()} delta={delta} skip={result}")
     return result
 
 
-def print_storage_summary(min_size=MIN_SIZE_GB, to_console=False):
-    """Summarize storage usage by device and top-level folders.
+def print_storage_summary(min_size=MIN_SIZE_GB, to_console=False, order_by='size', show_tree=False):
+    """Summarize storage usage per device.
     
-    Writes output table content to logs/idrive_storage_use_by_device.log instead of console by default.
+    order_by options:
+      - 'size': Largest folders and devices first (default)
+      - 'recent': Most recently updated/scanned folders and devices first
+      - 'oldest': Oldest updated/scanned folders and devices first
+    
+    Writes:
+      - One-line per device summary to logs/idrive_storage_summary.log
+      - Full folder hierarchy to logs/idrive_storage_use_by_device.log
     """
-    # Fetch all getProperties rows with non-zero size
+    # Fetch all getProperties rows with non-zero size, ordered by timestamp ascending so latest scan overwrites
     cur.execute(
         """
-        SELECT device_id, device_name, path, size, tag, timestamp, drilled
+        SELECT device_id, device_name, path, size, tag, timestamp, drilled, lmd
         FROM api_calls
         WHERE endpoint = 'getProperties' AND size IS NOT NULL AND size >= 0
-        ORDER BY device_name, path
+        ORDER BY timestamp ASC
         """
     )
     rows = cur.fetchall()
@@ -765,16 +811,23 @@ def print_storage_summary(min_size=MIN_SIZE_GB, to_console=False):
     if not devices:
         return
         
+    order_labels = {
+        'recent': 'Ordered by: Most Recent Updates',
+        'oldest': 'Ordered by: Oldest Updates',
+        'size': 'Ordered by: Size / Status'
+    }
+    order_label = order_labels.get(order_by, f"Ordered by: {order_by}")
+
     lines = []
     lines.append("\n" + "=" * 180)
-    lines.append(f"{'IDRIVE STORAGE USE BY DEVICE':^180}")
+    lines.append(f"{f'IDRIVE STORAGE USE BY DEVICE ({order_label})':^180}")
     lines.append("=" * 180)
     
     def is_drive_root(path):
         p = path.strip('/')
         return len(p) <= 1 or p.upper() in ('C', 'D', 'E', 'F', 'VOLUMES')
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     dev_summaries = []
 
     for dev_id, dev_info in sorted(devices.items(), key=lambda x: x[1]['name']):
@@ -813,9 +866,20 @@ def print_storage_summary(min_size=MIN_SIZE_GB, to_console=False):
                 else:
                     roots.append(f)
 
-            roots.sort(key=lambda x: (-(x['size'] if x['size'] is not None else 0), x['path']))
+            def folder_sort_key(x):
+                ts = x.get('timestamp') or ''
+                sz = x.get('size') if x.get('size') is not None else 0
+                if order_by == 'recent':
+                    return (ts, sz)
+                elif order_by == 'oldest':
+                    return (ts if ts else '0000-00-00', -sz)
+                else:
+                    return (sz, ts)
+
+            rev = (order_by != 'oldest')
+            roots.sort(key=folder_sort_key, reverse=rev)
             for p_path in children_map:
-                children_map[p_path].sort(key=lambda x: (-(x['size'] if x['size'] is not None else 0), x['path']))
+                children_map[p_path].sort(key=folder_sort_key, reverse=rev)
 
             res = []
             def traverse(f, ancestor_tags):
@@ -855,6 +919,7 @@ def print_storage_summary(min_size=MIN_SIZE_GB, to_console=False):
         
     dev_status_map = get_devices_status_map()
     dev_lmd_info = {}
+    dev_scan_info = {}
     for dev_id in devices:
         cur.execute(
             "SELECT path, lmd FROM api_calls WHERE device_id = ? AND lmd IS NOT NULL AND lmd != '' ORDER BY lmd DESC LIMIT 1",
@@ -868,18 +933,56 @@ def print_storage_summary(min_size=MIN_SIZE_GB, to_console=False):
         else:
             dev_lmd_info[dev_id] = {'lmd': '', 'lmd_str': '[unknown]', 'path': ''}
 
-    dev_summaries.sort(
-        key=lambda x: (
-            dev_status_map.get(x['id'], {}).get('online', 1),
-            dev_lmd_info.get(x['id'], {}).get('lmd', ''),
-            x['total_size']
-        ),
-        reverse=True
-    )
+        cur.execute(
+            "SELECT MAX(timestamp) as max_ts, MIN(timestamp) as min_ts FROM api_calls WHERE device_id = ? AND timestamp IS NOT NULL AND timestamp != ''",
+            (dev_id,)
+        )
+        ts_r = cur.fetchone()
+        max_ts = ts_r['max_ts'] if ts_r and ts_r['max_ts'] else ''
+        min_ts = ts_r['min_ts'] if ts_r and ts_r['min_ts'] else ''
+        max_ts_str = max_ts.replace('T', ' ')[:16] if max_ts else '[never]'
+        dev_scan_info[dev_id] = {
+            'latest_scan': max_ts,
+            'latest_scan_str': max_ts_str,
+            'oldest_scan': min_ts
+        }
+
+    for ds in dev_summaries:
+        dev_id = ds['id']
+        ds['latest_scan'] = dev_scan_info.get(dev_id, {}).get('latest_scan', '')
+        ds['latest_scan_str'] = dev_scan_info.get(dev_id, {}).get('latest_scan_str', '[never]')
+
+    if order_by == 'recent':
+        dev_summaries.sort(
+            key=lambda x: (
+                dev_status_map.get(x['id'], {}).get('active', 1),
+                x.get('latest_scan') or '',
+                x['total_size']
+            ),
+            reverse=True
+        )
+    elif order_by == 'oldest':
+        dev_summaries.sort(
+            key=lambda x: (
+                -dev_status_map.get(x['id'], {}).get('active', 1),
+                x.get('latest_scan') or '0000-00-00',
+                -x['total_size']
+            ),
+            reverse=False
+        )
+    else:  # 'size' (default)
+        dev_summaries.sort(
+            key=lambda x: (
+                dev_status_map.get(x['id'], {}).get('active', 1),
+                dev_lmd_info.get(x['id'], {}).get('lmd', ''),
+                x['total_size']
+            ),
+            reverse=True
+        )
     
     for ds in dev_summaries:
         dev_id = ds['id']
-        status_info = dev_status_map.get(dev_id, {'status_str': 'Online'})
+        status_info = dev_status_map.get(dev_id, {'status_str': 'Active', 'active': 1})
         status_str = status_info['status_str']
         total_gb = ds['total_size'] / (1024**3)
         
@@ -887,13 +990,16 @@ def print_storage_summary(min_size=MIN_SIZE_GB, to_console=False):
         l_str = info['lmd_str']
         l_path = info['path']
         if l_path:
-            if len(l_path) > 50:
-                l_path = "..." + l_path[-47:]
+            if len(l_path) > 40:
+                l_path = "..." + l_path[-37:]
             mod_display = f"{l_str} ({l_path})"
         else:
             mod_display = l_str
 
-        lines.append(f"Device: {ds['name']:<22} | Status: {status_str:<7} | Last Mod: {mod_display:<75} | Total Scanned Size: {total_gb:>8.2f} GB")
+        last_scan_str = ds.get('latest_scan_str', '[never]')
+        lines.append(
+            f"Device: {ds['name']:<20} | Total Scanned Size: {total_gb:>8.2f} GB | Last Scanned: {last_scan_str:<16} | Status: {status_str:<8} | Last Mod: {mod_display}"
+        )
         if ds['display_folders']:
             show_all_top = total_gb < min_size
             for f in ds['display_folders']:
@@ -928,6 +1034,8 @@ def print_storage_summary(min_size=MIN_SIZE_GB, to_console=False):
                 if ts_raw:
                     try:
                         dt = datetime.fromisoformat(ts_raw)
+                        if dt.tzinfo is not None:
+                            dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
                         if (now - dt) > timedelta(days=14):
                             stale_str = ' [Needs Refresh]'
                     except Exception:
@@ -940,143 +1048,213 @@ def print_storage_summary(min_size=MIN_SIZE_GB, to_console=False):
         else:
             lines.append(f"  - (no folders >= {min_size:.2f} GB)")
     lines.append("=" * 180)
-    
-    table_content = "\n".join(lines) + "\n"
-    log_file = os.path.join(LOG_DIR, "idrive_storage_use_by_device.log")
-    with open(log_file, "w", encoding="utf-8") as f:
-        f.write(table_content)
-        
+    tree_table_content = "\n".join(lines) + "\n"
+    tree_log_file = os.path.join(LOG_DIR, "idrive_storage_use_by_device.log")
+    with open(tree_log_file, "w", encoding="utf-8") as f:
+        f.write(tree_table_content)
+
+    # --- BUILD COMPACT ONE-LINE-PER-DEVICE SUMMARY TABLE ---
+    summary_lines = []
+    summary_lines.append("\n" + "=" * 155)
+    summary_lines.append(f"{f'IDRIVE STORAGE SUMMARY ({order_label})':^155}")
+    summary_lines.append("=" * 155)
+    summary_lines.append(f"{'No.':<4} | {'Device Name':<22} | {'Scanned Size':>12} | {'Last Scanned':<16} | {'Status':<9} | {'Last Modified (Folder)':<50} | {'Device ID':<22}")
+    summary_lines.append("-" * 155)
+
+    total_acct_size = 0.0
+    active_count = 0
+    inactive_count = 0
+
+    for idx, ds in enumerate(dev_summaries, 1):
+        dev_id = ds['id']
+        status_info = dev_status_map.get(dev_id, {'status_str': 'Active', 'active': 1})
+        status_str = status_info['status_str']
+        if status_info.get('active', 1):
+            active_count += 1
+        else:
+            inactive_count += 1
+
+        total_gb = ds['total_size'] / (1024**3)
+        total_acct_size += total_gb
+
+        info = dev_lmd_info.get(dev_id, {'lmd_str': '[unknown]', 'path': ''})
+        l_str = info['lmd_str']
+        l_path = info['path']
+        if l_path:
+            if len(l_path) > 30:
+                l_path = "..." + l_path[-27:]
+            mod_display = f"{l_str} ({l_path})"
+        else:
+            mod_display = l_str
+
+        last_scan_str = ds.get('latest_scan_str', '[never]')
+        summary_lines.append(
+            f"{idx:<4} | {ds['name']:<22} | {total_gb:>9.2f} GB | {last_scan_str:<16} | {status_str:<9} | {mod_display:<50} | {dev_id:<22}"
+        )
+
+    summary_lines.append("-" * 155)
+    summary_lines.append(
+        f"TOTAL ACCOUNT STORAGE: {total_acct_size:.2f} GB Across {len(dev_summaries)} Devices (Active: {active_count}, Inactive: {inactive_count})"
+    )
+    summary_lines.append("=" * 155)
+    summary_table_content = "\n".join(summary_lines) + "\n"
+
+    summary_log_file = os.path.join(LOG_DIR, "idrive_storage_summary.log")
+    with open(summary_log_file, "w", encoding="utf-8") as f:
+        f.write(summary_table_content)
+
     if to_console:
-        print(table_content)
+        if show_tree:
+            print(tree_table_content)
+        else:
+            print(summary_table_content)
     else:
-        print(f"\n[*] IDRIVE STORAGE USE BY DEVICE table written to: {log_file}")
+        print(f"\n[*] IDRIVE STORAGE SUMMARY (One line per device) written to: {summary_log_file}")
+        print(f"[*] Detailed hierarchy written to: {tree_log_file}")
+    return tree_table_content if show_tree else summary_table_content
 
 
-def run_interactive(min_size=MIN_SIZE_GB):
+def run_interactive(min_size=MIN_SIZE_GB, order_by='size'):
     """Run interactive loop supporting Storage Management (default) and Device Management modes."""
     current_view = 'storage'
+    current_order = order_by
 
     while True:
         if current_view == 'storage':
-            print("\n" + "=" * 155)
-            print(f"{'IDRIVE AUDIT INTERACTIVE DASHBOARD':^155}")
-            print(f"{'[S] Storage Management (Active)   |   [D] Device Management':^155}")
-            print("=" * 155)
+            print("\n" + "=" * 165)
+            print(f"{'IDRIVE AUDIT INTERACTIVE DASHBOARD':^165}")
+            print(f"{'[S] Storage Management (Active)   |   [D] Device Management':^165}")
+            print("=" * 165)
 
             # Print storage usage by device
-            print_storage_summary(min_size=min_size)
+            print_storage_summary(min_size=min_size, order_by=current_order)
 
             status_map = get_devices_status_map()
 
             def row_sort_key(r):
                 dev_id = r['device_id']
                 online = status_map.get(dev_id, {}).get('online', 0)
-                dev_name = r['device_name'] or ''
-                path_val = r['path'] or ''
-                return (-online, dev_name.lower(), path_val.lower())
+                dev_name = (r['device_name'] or '').lower()
+                path_val = (r['path'] or '').lower()
+                ts = r['timestamp'] or ''
+                sz = r['size'] if r['size'] is not None else 0
+                if current_order == 'recent':
+                    return (ts, sz, online, dev_name, path_val)
+                elif current_order == 'oldest':
+                    return (ts if ts else '0000-00-00', -sz, -online, dev_name, path_val)
+                else:
+                    return (-online, -sz, dev_name, path_val)
 
             # Fetch all drilled folders (which have drilled > 0 in database)
             cur.execute(
                 """
-                SELECT device_id, device_name, path, size, filecount, tag, active, lmd
+                SELECT device_id, device_name, path, size, filecount, tag, active, lmd, timestamp
                 FROM api_calls
                 WHERE endpoint = 'getProperties' AND drilled > 0
                 """
             )
-            drilled_rows = sorted(cur.fetchall(), key=row_sort_key)
+            drilled_raw = cur.fetchall()
+            drilled_rows = sorted(drilled_raw, key=row_sort_key, reverse=(current_order == 'recent'))
 
             # Fetch all tagged folders (excluding drilled folders)
             cur.execute(
                 """
-                SELECT device_id, device_name, path, size, filecount, tag, active, lmd
+                SELECT device_id, device_name, path, size, filecount, tag, active, lmd, timestamp
                 FROM api_calls
                 WHERE endpoint = 'getProperties' AND tag IS NOT NULL AND tag != '' AND tag != '0' AND (drilled IS NULL OR drilled = 0)
                 """
             )
-            tagged_rows = sorted(cur.fetchall(), key=row_sort_key)
+            tagged_raw = cur.fetchall()
+            tagged_rows = sorted(tagged_raw, key=row_sort_key, reverse=(current_order == 'recent'))
 
-            # Fetch the top 10 largest untagged folders (excluding drilled folders)
+            # Fetch untagged folders (excluding drilled folders)
             cur.execute(
                 """
-                SELECT device_id, device_name, path, size, filecount, tag, active, lmd
+                SELECT device_id, device_name, path, size, filecount, tag, active, lmd, timestamp
                 FROM api_calls
                 WHERE endpoint = 'getProperties' AND size IS NOT NULL AND size > 0 AND (tag IS NULL OR tag = '' OR tag = '0') AND (drilled IS NULL OR drilled = 0)
-                ORDER BY size DESC
-                LIMIT 10
                 """
             )
-            untagged_rows = cur.fetchall()
+            untagged_raw = cur.fetchall()
+            untagged_rows = sorted(untagged_raw, key=row_sort_key, reverse=(current_order == 'recent'))[:10]
 
             rows = list(drilled_rows) + list(tagged_rows) + list(untagged_rows)
 
-            print("\n" + "=" * 155)
-            print(f"{'IDRIVE ACCOUNT STORAGE MANAGEMENT':^155}")
-            print("=" * 155)
+            print("\n" + "=" * 165)
+            order_desc = {'recent': 'Most Recent Updates', 'oldest': 'Oldest Updates', 'size': 'Size'}.get(current_order, current_order)
+            print(f"{f'IDRIVE ACCOUNT STORAGE MANAGEMENT (Sorted by: {order_desc})':^165}")
+            print("=" * 165)
 
             current_idx = 1
-            header_str = f"{'No.':<4} | {'Device':<20} | {'Path':<55} | {'Size (GB)':>10} | {'Last Modified':<19} | {'Tag':<18} | {'Device Status':<13}"
+            header_str = f"{'No.':<4} | {'Device':<18} | {'Path':<45} | {'Size (GB)':>10} | {'Last Scanned':<16} | {'Last Modified':<19} | {'Tag':<16} | {'Device Status':<13}"
 
             if drilled_rows:
                 print(f"\n--- DRILLED FOLDERS (Expanded into subfolders) ---")
                 print(header_str)
-                print("-" * 155)
+                print("-" * 165)
                 for row in drilled_rows:
                     size_val = row['size'] if row['size'] is not None else 0
                     size_gb = size_val / (1024**3)
                     tag_str = row['tag'] if row['tag'] else "[none]"
                     dev_id = row['device_id']
                     status_str = status_map.get(dev_id, {}).get('status_str', 'Offline')
-                    dev_name = row['device_name'][:20]
+                    dev_name = (row['device_name'] or '')[:18]
                     path_str = row['path']
-                    if len(path_str) > 53:
-                        path_str = "..." + path_str[-50:]
+                    if len(path_str) > 43:
+                        path_str = "..." + path_str[-40:]
                     lmd_raw = row['lmd'] if 'lmd' in row.keys() and row['lmd'] else ''
                     lmd_str = lmd_raw.replace('T', ' ')[:19] if lmd_raw else "[unknown]"
-                    print(f"{current_idx:<4} | {dev_name:<20} | {path_str:<55} | {size_gb:>10.2f} | {lmd_str:<19} | {tag_str:<18} | {status_str:<13}")
+                    ts_raw = row['timestamp'] if 'timestamp' in row.keys() and row['timestamp'] else ''
+                    ts_str = ts_raw.replace('T', ' ')[:16] if ts_raw else "[never]"
+                    print(f"{current_idx:<4} | {dev_name:<18} | {path_str:<45} | {size_gb:>10.2f} | {ts_str:<16} | {lmd_str:<19} | {tag_str:<16} | {status_str:<13}")
                     current_idx += 1
-                print("-" * 155)
+                print("-" * 165)
 
             if tagged_rows:
                 print(f"\n--- TAGGED FOLDERS (Not drilled down) ---")
                 print(header_str)
-                print("-" * 155)
+                print("-" * 165)
                 for row in tagged_rows:
                     size_val = row['size'] if row['size'] is not None else 0
                     size_gb = size_val / (1024**3)
                     tag_str = row['tag']
                     dev_id = row['device_id']
                     status_str = status_map.get(dev_id, {}).get('status_str', 'Offline')
-                    dev_name = row['device_name'][:20]
+                    dev_name = (row['device_name'] or '')[:18]
                     path_str = row['path']
-                    if len(path_str) > 53:
-                        path_str = "..." + path_str[-50:]
+                    if len(path_str) > 43:
+                        path_str = "..." + path_str[-40:]
                     lmd_raw = row['lmd'] if 'lmd' in row.keys() and row['lmd'] else ''
                     lmd_str = lmd_raw.replace('T', ' ')[:19] if lmd_raw else "[unknown]"
-                    print(f"{current_idx:<4} | {dev_name:<20} | {path_str:<55} | {size_gb:>10.2f} | {lmd_str:<19} | {tag_str:<18} | {status_str:<13}")
+                    ts_raw = row['timestamp'] if 'timestamp' in row.keys() and row['timestamp'] else ''
+                    ts_str = ts_raw.replace('T', ' ')[:16] if ts_raw else "[never]"
+                    print(f"{current_idx:<4} | {dev_name:<18} | {path_str:<45} | {size_gb:>10.2f} | {ts_str:<16} | {lmd_str:<19} | {tag_str:<16} | {status_str:<13}")
                     current_idx += 1
-                print("-" * 155)
+                print("-" * 165)
 
             if untagged_rows:
-                print(f"\n--- UNTAGGED FOLDERS (Not drilled down - Top 10 by size) ---")
+                print(f"\n--- UNTAGGED FOLDERS (Not drilled down - Top 10 by sort order) ---")
                 print(header_str)
-                print("-" * 155)
+                print("-" * 165)
                 for row in untagged_rows:
                     size_val = row['size'] if row['size'] is not None else 0
                     size_gb = size_val / (1024**3)
                     tag_str = "[none]"
                     dev_id = row['device_id']
                     status_str = status_map.get(dev_id, {}).get('status_str', 'Offline')
-                    dev_name = row['device_name'][:20]
+                    dev_name = (row['device_name'] or '')[:18]
                     path_str = row['path']
-                    if len(path_str) > 53:
-                        path_str = "..." + path_str[-50:]
+                    if len(path_str) > 43:
+                        path_str = "..." + path_str[-40:]
                     lmd_raw = row['lmd'] if 'lmd' in row.keys() and row['lmd'] else ''
                     lmd_str = lmd_raw.replace('T', ' ')[:19] if lmd_raw else "[unknown]"
-                    print(f"{current_idx:<4} | {dev_name:<20} | {path_str:<55} | {size_gb:>10.2f} | {lmd_str:<19} | {tag_str:<18} | {status_str:<13}")
+                    ts_raw = row['timestamp'] if 'timestamp' in row.keys() and row['timestamp'] else ''
+                    ts_str = ts_raw.replace('T', ' ')[:16] if ts_raw else "[never]"
+                    print(f"{current_idx:<4} | {dev_name:<18} | {path_str:<45} | {size_gb:>10.2f} | {ts_str:<16} | {lmd_str:<19} | {tag_str:<16} | {status_str:<13}")
                     current_idx += 1
-                print("-" * 155)
+                print("-" * 165)
 
-            print(f"Options: Select folder (1-{len(rows)}), enter path or keyword search (e.g. '/Pictures'), 'D' for Device Management, 'r' to refresh, 'q' to quit.")
+            print(f"Options: Select folder (1-{len(rows)}), enter path or keyword search (e.g. '/Pictures'), 'D' for Device Mgmt, 'O' to change sort order ({current_order}), 'V' to view summary, 'r' to refresh, 'q' to quit.")
             choice = input("Choice: ").strip()
 
             if not choice:
@@ -1094,15 +1272,37 @@ def run_interactive(min_size=MIN_SIZE_GB):
             elif c_lower in ('s', 'sm', 'storage'):
                 current_view = 'storage'
                 continue
+            elif c_lower in ('o', 'order', 'sort'):
+                print(f"\nSelect Table Sort Order:")
+                print(f"  [1] Most Recent Updates (newest scans first)")
+                print(f"  [2] Oldest Updates (oldest scans first)")
+                print(f"  [3] Size (largest folders and devices first)")
+                o_choice = input(f"Choice [1-3, current: {current_order}]: ").strip().lower()
+                if o_choice in ('1', 'recent', 'r'):
+                    current_order = 'recent'
+                    print("Sort order updated to: Most Recent Updates")
+                elif o_choice in ('2', 'oldest', 'o'):
+                    current_order = 'oldest'
+                    print("Sort order updated to: Oldest Updates")
+                elif o_choice in ('3', 'size', 's'):
+                    current_order = 'size'
+                    print("Sort order updated to: Size")
+                continue
+            elif c_lower in ('v', 'view', 'summary'):
+                print_storage_summary(min_size=min_size, to_console=True, order_by=current_order, show_tree=False)
+                continue
+            elif c_lower in ('t', 'tree'):
+                print_storage_summary(min_size=min_size, to_console=True, order_by=current_order, show_tree=True)
+                continue
 
             if choice.isdigit() and 1 <= int(choice) <= len(rows):
                 selected_row = rows[int(choice) - 1]
-                manage_folder_interactive(selected_row, min_size)
+                manage_folder_interactive(selected_row, min_size, order_by=current_order)
             else:
                 # Search database for matching folder path
                 cur.execute(
                     """
-                    SELECT device_id, device_name, path, size, filecount, tag, active, lmd, drilled
+                    SELECT device_id, device_name, path, size, filecount, tag, active, lmd, drilled, timestamp
                     FROM api_calls
                     WHERE endpoint = 'getProperties' AND LOWER(path) LIKE ?
                     ORDER BY size DESC
@@ -1111,7 +1311,7 @@ def run_interactive(min_size=MIN_SIZE_GB):
                 )
                 search_matches = cur.fetchall()
                 if len(search_matches) == 1:
-                    manage_folder_interactive(search_matches[0], min_size)
+                    manage_folder_interactive(search_matches[0], min_size, order_by=current_order)
                 elif len(search_matches) > 1:
                     print(f"\nFound {len(search_matches)} matching folders:")
                     print(f"{'No.':<4} | {'Device':<20} | {'Path':<55} | {'Size (GB)':>10} | {'Tag':<15}")
@@ -1126,7 +1326,7 @@ def run_interactive(min_size=MIN_SIZE_GB):
                     print("-" * 110)
                     sel_match = input(f"Select matching folder (1-{len(search_matches)}, or Enter to cancel): ").strip()
                     if sel_match.isdigit() and 1 <= int(sel_match) <= len(search_matches):
-                        manage_folder_interactive(search_matches[int(sel_match) - 1], min_size)
+                        manage_folder_interactive(search_matches[int(sel_match) - 1], min_size, order_by=current_order)
                 else:
                     print(f"No folder found matching '{choice}'. Enter a number 1-{len(rows)}, a path search, or 'D' for Device Management.")
 
@@ -1163,6 +1363,16 @@ def run_interactive(min_size=MIN_SIZE_GB):
                 else:
                     dev_lmd_info[d_id] = {'lmd': '', 'lmd_str': '[unknown]', 'path': ''}
 
+            dev_scan_map = {}
+            for d_id in status_map:
+                cur.execute(
+                    "SELECT MAX(timestamp) as max_ts FROM api_calls WHERE device_id = ? AND timestamp IS NOT NULL AND timestamp != ''",
+                    (d_id,)
+                )
+                ts_r = cur.fetchone()
+                max_ts = ts_r['max_ts'] if ts_r and ts_r['max_ts'] else ''
+                dev_scan_map[d_id] = max_ts.replace('T', ' ')[:16] if max_ts else '[never]'
+
             dev_list = sorted(
                 status_map.items(),
                 key=lambda x: (
@@ -1174,7 +1384,7 @@ def run_interactive(min_size=MIN_SIZE_GB):
             )
 
             print(f"\n--- DEVICE MANAGEMENT ---")
-            print(f"{'No.':<4} | {'Device Name':<25} | {'Device ID':<25} | {'Status':<10} | {'Last Modified (Folder)':<65} | {'Scanned Size':>12}")
+            print(f"{'No.':<4} | {'Device Name':<20} | {'Device ID':<22} | {'Status':<9} | {'Last Scanned':<17} | {'Last Modified (Folder)':<50} | {'Scanned Size':>12}")
             print("-" * 155)
             for idx, (d_id, d_info) in enumerate(dev_list, 1):
                 sz_gb = size_map.get(d_id, 0) / (1024**3)
@@ -1182,12 +1392,13 @@ def run_interactive(min_size=MIN_SIZE_GB):
                 l_str = info['lmd_str']
                 l_path = info['path']
                 if l_path:
-                    if len(l_path) > 40:
-                        l_path = "..." + l_path[-37:]
+                    if len(l_path) > 30:
+                        l_path = "..." + l_path[-27:]
                     mod_display = f"{l_str} ({l_path})"
                 else:
                     mod_display = l_str
-                print(f"{idx:<4} | {d_info['name']:<25} | {d_id:<25} | {d_info['status_str']:<10} | {mod_display:<65} | {sz_gb:>9.2f} GB")
+                s_ts = dev_scan_map.get(d_id, '[never]')
+                print(f"{idx:<4} | {d_info['name']:<20} | {d_id:<22} | {d_info['status_str']:<9} | {s_ts:<17} | {mod_display:<50} | {sz_gb:>9.2f} GB")
             print("-" * 155)
 
             print(f"Options: Select device (1-{len(dev_list)}) to view options / drill down, 'S' for Storage Management, 'r' to refresh, 'q' to quit.")
@@ -1234,7 +1445,7 @@ def manage_device_interactive(device_id, device_name, min_size):
         print("-" * 80)
         print("Actions:")
         print("  1. Drill Down / Audit Device (discover top-level folders & sizes)")
-        print(f"  2. Toggle Online/Offline status (Current: {dev_info['status_str']})")
+        print(f"  2. Toggle Active/Inactive status (Current: {dev_info['status_str']})")
         print("  3. Purge / Delete device audit records from database")
         print("  4. Go Back")
         
@@ -1280,9 +1491,9 @@ def manage_device_interactive(device_id, device_name, min_size):
                     selected_folder = dev_folders[int(f_choice) - 1]
                     manage_folder_interactive(selected_folder, min_size)
         elif act == '2':
-            new_online = 0 if dev_info['online'] else 1
-            new_status_str = "Online" if new_online else "Offline"
-            set_device_status(device_id, new_online)
+            new_active = 0 if dev_info['active'] else 1
+            new_status_str = "Active" if new_active else "Inactive"
+            set_device_status(device_id, new_active)
             print(f"\n[+] Set device '{dev_info['name']}' status to: {new_status_str}")
         elif act == '3':
             confirm = input(f"Are you sure you want to purge all audit records for '{dev_info['name']}' from database? (y/N): ").strip().lower()
@@ -1299,7 +1510,7 @@ def manage_device_interactive(device_id, device_name, min_size):
 
 
 
-def manage_folder_interactive(row, min_size):
+def manage_folder_interactive(row, min_size, order_by='size'):
     """Sub-menu to manage a specific selected folder."""
     device_id = row['device_id']
     device_name = row['device_name']
@@ -1392,7 +1603,7 @@ def manage_folder_interactive(row, min_size):
             crawl(device_id, device_name, path, depth=1, max_depth=1, ignore_skip=True, min_size_gb=min_size)
             print("Drill down completed.")
             try:
-                print_storage_summary(min_size=min_size)
+                print_storage_summary(min_size=min_size, order_by=order_by)
             except Exception:
                 pass
         elif act == '2':
@@ -1400,7 +1611,7 @@ def manage_folder_interactive(row, min_size):
             tag_folder(device_id, device_name, path, new_tag)
             print(f"Successfully updated tag to: {new_tag if new_tag else '[none]'}")
             try:
-                print_storage_summary(min_size=min_size)
+                print_storage_summary(min_size=min_size, order_by=order_by)
             except Exception:
                 pass
         elif act == '3':
@@ -1412,14 +1623,14 @@ def manage_folder_interactive(row, min_size):
             conn.commit()
             print(f"Successfully toggled active status to: {'Yes' if new_active else 'No'}")
             try:
-                print_storage_summary(min_size=min_size)
+                print_storage_summary(min_size=min_size, order_by=order_by)
             except Exception:
                 pass
 
 
 
-def manage_devices_interactive():
-    """Interactive menu to view and toggle device Online/Offline status."""
+def manage_devices_interactive(standalone=False):
+    """Interactive menu to view and toggle device Active/Inactive status."""
     while True:
         status_map = get_devices_status_map()
         dev_list = sorted(status_map.items(), key=lambda x: x[1]['name'])
@@ -1435,21 +1646,26 @@ def manage_devices_interactive():
         for idx, (d_id, d_info) in enumerate(dev_list, 1):
             print(f"{idx:<4} | {d_info['name']:<30} | {d_id:<30} | {d_info['status_str']:<10}")
         print("-" * 85)
-        print(f"Enter 1-{len(dev_list)} to toggle device status (Online/Offline), or press Enter / 'b' to go back.")
-        choice = input("Choice: ").strip().lower()
-        if not choice or choice == 'b':
+        exit_hint = "press Enter to exit" if standalone else "press Enter / 'b' to go back"
+        print(f"Enter 1-{len(dev_list)} to toggle device status (Active/Inactive), or {exit_hint}.")
+        try:
+            choice = input("Choice: ").strip().lower()
+        except (KeyboardInterrupt, EOFError):
+            print()
+            break
+        if not choice or choice in ('b', 'q'):
             break
         if choice.isdigit() and 1 <= int(choice) <= len(dev_list):
             sel_id, sel_info = dev_list[int(choice) - 1]
-            new_online = 0 if sel_info['online'] else 1
-            new_status_str = "Online" if new_online else "Offline"
-            set_device_status(sel_id, new_online)
+            new_active = 0 if sel_info['active'] else 1
+            new_status_str = "Active" if new_active else "Inactive"
+            set_device_status(sel_id, new_active)
             print(f"\n[+] Set device '{sel_info['name']}' status to: {new_status_str}")
         else:
             print(f"Invalid choice. Please enter a number between 1 and {len(dev_list)}.")
 
 
-def run_audit(start_folder=None, one_level=False, device_filter=None, max_depth=MAX_DEPTH, force=False, min_size=MIN_SIZE_GB):
+def run_audit(start_folder=None, one_level=False, device_filter=None, max_depth=MAX_DEPTH, force=False, min_size=MIN_SIZE_GB, order_by='size', include_inactive=False):
     """Perform the audit.
 
     If both ``device_filter`` and ``start_folder`` are provided the script will
@@ -1463,16 +1679,24 @@ def run_audit(start_folder=None, one_level=False, device_filter=None, max_depth=
             level beneath the root.
         device_filter: device id or nickname to target; if ``None`` all devices
             are examined.
+        order_by: sorting order for final summary table ('recent', 'oldest', or 'size').
+        include_inactive: when True, inactive devices are also audited (default False).
     """
     print(f"\n{'IDRIVE RECURSIVE ACCOUNT AUDIT':^85}")
     print(f"{'Folder Hierarchy':<50} | {'Size':>13} | {'Files':>10}")
     print("-" * 85)
     
+    status_map = get_devices_status_map()
+
     for dev in RAW_DEVICES:
         if device_filter:
             if device_filter.lower() not in dev['device_id'].lower() and \
                device_filter.lower() not in dev['nick_name'].lower():
                 continue
+        elif not include_inactive and not status_map.get(dev['device_id'], {}).get('active', 1):
+            print(f"\nDEVICE: {dev['nick_name']} ({dev['device_id']}) - [INACTIVE: Skipped]")
+            continue
+
         print(f"\nDEVICE: {dev['nick_name']} ({dev['device_id']})")
         root = start_folder or "/"
         # compute allowed recursion depth. We treat `max_depth` as the
@@ -1496,6 +1720,7 @@ def run_audit(start_folder=None, one_level=False, device_filter=None, max_depth=
     
     print(f"\nAudit complete. Results saved to {OUTPUT_FILE}")
     print(f"API call history is recorded in {DB_FILE}")
+    print_storage_summary(min_size=min_size, to_console=False, order_by=order_by)
     # close database connection cleanly
     conn.close()
 
@@ -1510,6 +1735,10 @@ if __name__ == "__main__":
     parser.add_argument("--force", action="store_true", help="Bypass 24h skip logic and re-scan everything")
     parser.add_argument("--min-size", type=float, default=MIN_SIZE_GB, help=f"Minimum size in GB to display (default {MIN_SIZE_GB})")
     parser.add_argument("--interactive", "-i", action="store_true", help="Run interactive session to view top folders, drill down, tag, or clean up")
+    parser.add_argument("--order", "--sort", dest="order_by", choices=["recent", "oldest", "size"], default="size",
+                        help="Sort order for IDRIVE STORAGE USE BY DEVICE table: 'recent' (most recent updates), 'oldest' (oldest updates), or 'size' (default)")
+    parser.add_argument("--summary", action="store_true", help="Print the compact one-line per device storage summary table to console and exit")
+    parser.add_argument("--tree", "--full-summary", action="store_true", help="Print the full folder hierarchy storage table to console and exit")
 
     # tagging operations
     parser.add_argument("--tag", help="Mark a device/path as tagged (format path[=value], value optional)")
@@ -1517,33 +1746,53 @@ if __name__ == "__main__":
     parser.add_argument("--list-tags", action="store_true",
                         help="Print all tagged paths for matching device")
 
-    # device online status operations
-    parser.add_argument("--set-device-online", help="Set device to Online by ID or Name")
-    parser.add_argument("--set-device-offline", help="Set device to Offline by ID or Name")
-    parser.add_argument("--list-devices", action="store_true", help="List all devices and their Online/Offline status")
+    # device active / online status operations
+    parser.add_argument("--edit-devices", "--manage-devices", action="store_true",
+                        help="Interactive CLI prompt to view and edit device Active/Inactive status")
+    parser.add_argument("--set-device-active", help="Set device to Active by ID or Name")
+    parser.add_argument("--set-device-inactive", help="Set device to Inactive by ID or Name")
+    parser.add_argument("--include-inactive", action="store_true", help="Include inactive devices in full audit (default skips inactive devices)")
+    parser.add_argument("--set-device-online", help="Set device to Active/Online by ID or Name (alias for --set-device-active)")
+    parser.add_argument("--set-device-offline", help="Set device to Inactive/Offline by ID or Name (alias for --set-device-inactive)")
+    parser.add_argument("--list-devices", action="store_true", help="List all devices and prompt to edit their Active/Inactive status")
 
     args = parser.parse_args()
     print(f"Parsed parameters: {args}")
 
-    # handle device online status operations before interactive/crawl
-    if args.set_device_online or args.set_device_offline or args.list_devices:
+    # handle interactive device status editing request
+    if args.edit_devices:
+        manage_devices_interactive(standalone=True)
+        conn.close()
+        sys.exit(0)
+
+    # handle device active / online status operations before interactive/crawl
+    if args.set_device_active or args.set_device_inactive or args.set_device_online or args.set_device_offline or args.list_devices:
+        if args.set_device_active:
+            count = set_device_status(args.set_device_active, True)
+            print(f"Updated {count} device(s) to Active.")
+        if args.set_device_inactive:
+            count = set_device_status(args.set_device_inactive, False)
+            print(f"Updated {count} device(s) to Inactive.")
         if args.set_device_online:
             count = set_device_status(args.set_device_online, True)
-            print(f"Updated {count} device(s) to Online.")
+            print(f"Updated {count} device(s) to Active (Online).")
         if args.set_device_offline:
             count = set_device_status(args.set_device_offline, False)
-            print(f"Updated {count} device(s) to Offline.")
+            print(f"Updated {count} device(s) to Inactive (Offline).")
         if args.list_devices:
-            st_map = get_devices_status_map()
-            print("\nDevice List & Online Status:")
-            for d_id, d_info in sorted(st_map.items(), key=lambda x: x[1]['name']):
-                print(f"  - {d_info['name']:<30} ({d_id}): {d_info['status_str']}")
+            manage_devices_interactive(standalone=True)
+        conn.close()
+        sys.exit(0)
+
+    # handle summary display request
+    if args.summary or args.tree:
+        print_storage_summary(min_size=args.min_size, to_console=True, order_by=args.order_by, show_tree=args.tree)
         conn.close()
         sys.exit(0)
 
     # handle interactive session request
     if args.interactive:
-        run_interactive(min_size=args.min_size)
+        run_interactive(min_size=args.min_size, order_by=args.order_by)
         conn.close()
         sys.exit(0)
 
@@ -1599,5 +1848,7 @@ if __name__ == "__main__":
         device_filter=args.device_filter, 
         max_depth=args.max_depth,
         force=args.force,
-        min_size=args.min_size
+        min_size=args.min_size,
+        order_by=args.order_by,
+        include_inactive=args.include_inactive
     )

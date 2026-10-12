@@ -60,6 +60,27 @@ This script audits backed-up directories on your IDrive account using remote EVS
   python3 idrive-audit.py --force
   ```
 
+* **Storage Use Summary & Ordering**:
+  Output files generated after every audit or update:
+  - `logs/idrive_storage_summary.log`: Concise one-line per device storage summary table.
+  - `logs/idrive_storage_use_by_device.log`: Full recursive folder hierarchy tree table.
+
+  Display tables directly to console with customizable sort ordering:
+  ```bash
+  # Concise one-line per device summary (default sort by size/status)
+  python3 idrive-audit.py --summary
+
+  # Order by most recent updates (newest scan/update timestamp first)
+  python3 idrive-audit.py --summary --order recent
+
+  # Order by oldest updates (oldest scan/update timestamp first to find stale data)
+  python3 idrive-audit.py --summary --order oldest
+
+  # Full folder hierarchy tree table to console
+  python3 idrive-audit.py --tree
+  ```
+  *(In interactive mode `-i`, press `V` to view the device summary, `T` to view the full folder tree, or `O` to switch sort order on the fly).*
+
 * **Command Line Tagging Operations**:
   Tag, untag, or list tags on a device:
   ```bash
@@ -71,6 +92,22 @@ This script audits backed-up directories on your IDrive account using remote EVS
 
   # List tags
   python3 idrive-audit.py --device-filter NickolaysMacbook --list-tags
+* **Device Active / Inactive Status Management**:
+  Manage whether devices are active or retired/inactive to avoid redundant scans:
+  ```bash
+  # Launch interactive CLI prompt to view and toggle device statuses
+  python3 idrive-audit.py --edit-devices
+  # or
+  python3 idrive-audit.py --list-devices
+
+  # Mark a device active via script argument
+  python3 idrive-audit.py --set-device-active "NickolaysMacmini"
+
+  # Mark a device inactive via script argument (skips it from full audits)
+  python3 idrive-audit.py --set-device-inactive "ASUS"
+
+  # Run full audit including inactive devices (default skips inactive)
+  python3 idrive-audit.py --include-inactive
   ```
 
 ---
