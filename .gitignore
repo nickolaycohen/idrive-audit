@@ -7,3 +7,6 @@ out.txt
 logs/
 __pycache__/
 
+.vscode/
+.idrive_cookie
+
